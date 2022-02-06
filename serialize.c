@@ -55,9 +55,10 @@ int compar_tablekey(void const* x_, void const* y_)
 void push_bytes(struct buffer *b, char const* bytes, size_t len)
 {
     if (b->size - b->used < len) {
-        size_t newlen = b->size * 2;
-        while (newlen - b->used < len) { newlen *= 2; }
-        b->bytes = realloc(b->bytes, newlen); // XXX: handle failure
+        do {
+            b->size *= 2;
+        } while (b->size - b->used < len);
+        b->bytes = realloc(b->bytes, b->size); // XXX: handle failure
     }
 
     memcpy(b->bytes + b->used, bytes, len);
