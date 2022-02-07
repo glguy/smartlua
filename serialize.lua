@@ -67,7 +67,7 @@ S['function'] = function(f, file, refs, uprefs, upixes)
             else
                 uprefs[uid] = me
                 upixes[uid] = i
-                local v = debug.getupvalue(f, i)
+                local _, v = debug.getupvalue(f, i)
                 serialize_value(v, file, refs, uprefs, upixes)
             end
         end

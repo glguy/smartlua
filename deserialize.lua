@@ -78,10 +78,9 @@ D['function'] = function(file, env, refs, uprefs, upixes)
     return f
 end
 
-return function(file)
+return function(t, file)
     local refs, uprefs, upixes = {}, {}, {}
     assert(file:read() == 'table')
-    local t = {}
     addref(t, refs)
     local n = math.tointeger(file:read())
     for _ = 1, n do
