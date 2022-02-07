@@ -15,6 +15,10 @@ D['true'] = function() return true end
 D['false'] = function() return false end
 D['nil'] = function() return nil end
 
+function D.inf() return math.huge end
+function D.neginf() return -math.huge end
+function D.nan() return 0/0 end
+
 function D.integer(file)
     local line = file:read()
     return math.tointeger(line)

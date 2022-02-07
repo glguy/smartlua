@@ -21,7 +21,13 @@ function S.string(v, file)
 end
 
 function S.number(v, file)
-    if math.type(v) == 'integer' then
+    if v == math.huge then
+        utils.fprintf(file, "inf\n")
+    elseif -v == math.huge then
+        utils.fprintf(file, "neginf\n")
+    elseif v ~= v then
+        utils.fprintf(file, "nan\n")
+    elseif math.type(v) == 'integer' then
         utils.fprintf(file, "integer\n%d\n", v)
     else
         utils.fprintf(file, "number\n%a\n", v)
