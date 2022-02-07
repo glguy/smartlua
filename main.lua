@@ -65,7 +65,9 @@ end
 -- indexed by public keys.
 local function get_my_keys()
     local my_keys = {}
-    for filename in dir.dirtree(keys_dir()) do
+    local d = keys_dir()
+    dir.makepath(d)
+    for filename in dir.dirtree() do
         local key = open_private_key(filename)
         local pub = key:pubstr()
         my_keys[pub] = key
