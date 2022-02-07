@@ -4,32 +4,7 @@
 #include "lauxlib.h"
 #include "lualib.h"
 
-#include "serialize.h"
 #include "crypto.h"
-
-int l_serialize(lua_State *L)
-{
-    lua_settop(L, 1);
-    lua_newtable(L); // 2 - object to reference id
-    lua_newtable(L); // 3 - upvalueid to reference id
-    lua_newtable(L); // 4 - upvalueid to upvalue index
-
-    struct serializer s = {
-        .out.bytes = malloc(512),
-        .out.size = 512,
-        .out.used = 0,
-        .refs = 2,
-        .upvalrefs = 3,
-        .upvalixs = 4,
-        .next_refid = 1,
-    };
-
-    serialize_value(&s, L, 1);
-    lua_pushlstring(L, s.out.bytes, s.out.used);
-    free(s.out.bytes);
-
-    return 1;
-}
 
 static int backtrace(lua_State *L)
 {
@@ -45,9 +20,6 @@ int main(int argc, char **argv)
     if (L == NULL) abort();
 
     luaL_openlibs(L);
-
-    lua_pushcfunction(L, l_serialize);
-    lua_setglobal(L, "serialize");
 
     luaL_requiref(L, "crypto", luaopen_crypto, 0);
     lua_pop(L, 1);

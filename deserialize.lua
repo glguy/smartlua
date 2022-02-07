@@ -78,7 +78,7 @@ D['function'] = function(file, env, refs, uprefs, upixes)
     return f
 end
 
-local function deserialize(file)
+return function(file)
     local refs, uprefs, upixes = {}, {}, {}
     assert(file:read() == 'table')
     local t = {}
@@ -91,6 +91,3 @@ local function deserialize(file)
     end
     return t
 end
-
-local file = io.open('serialize.test')
-print(deserialize(file).read('9LtcVo7q+at5ihEYtbu+YScb6qlbTt4D7GwlO+3kc+k='))

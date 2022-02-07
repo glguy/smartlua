@@ -5,8 +5,11 @@ local app = require 'pl.app'
 local dir = require 'pl.dir'
 local file = require 'pl.file'
 local pretty = require 'pl.pretty'
-local tablex = require 'pl.tablex'
 local Set = require 'pl.Set'
+local stringio = require 'pl.stringio'
+local tablex = require 'pl.tablex'
+
+local serialize = require 'serialize'
 
 local my_version = '0.1'
 
@@ -184,7 +187,11 @@ local function step_transition(transition, env, signers, initial)
     end
     local chunk = assert(load(transition.code, 'transition', 't', e))
     local result = {assert(pcall(chunk))}
-    return sha256(serialize(transition) .. serialize(env)), table.unpack(result, 2)
+
+    local f = stringio.create()
+    serialize(transition, f)
+    serialize(env, f)
+    return sha256(f:value()), table.unpack(result, 2)
 end
 
 local function get_state(tophash)
