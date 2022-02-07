@@ -17,7 +17,12 @@ static int backtrace(lua_State *L)
 int main(int argc, char **argv)
 {
     lua_State *L = luaL_newstate();
-    if (L == NULL) abort();
+    int res;
+
+    if (L == NULL) {
+        fprintf(stderr, "Failed to allocate lua environment\n");
+        exit(EXIT_FAILURE);
+    }
 
     luaL_openlibs(L);
 
@@ -25,16 +30,27 @@ int main(int argc, char **argv)
     lua_pop(L, 1);
 
     lua_pushcfunction(L, backtrace);
-    luaL_loadfile(L, "main.lua");
+
+    res = luaL_loadfile(L, "main.lua");
+    if (res != LUA_OK) {
+        size_t len;
+        char const* msg = luaL_tolstring(L, -1, &len);
+        fprintf(stderr, "Load failed\n%s\n", msg);
+        lua_close(L);
+        exit(EXIT_FAILURE);
+    }
+
     for (int i = 1; i < argc; i++) {
         lua_pushstring(L, argv[i]);
     }
 
-    int res = lua_pcall(L, argc-1, 0, -argc-1);
-
+    res = lua_pcall(L, argc-1, 0, -argc-1);
     if (res != LUA_OK) {
-        printf("Execution failed: %s\n", lua_tostring(L, -1));
-        lua_pop(L, 1);
+        size_t len;
+        char const* msg = luaL_tolstring(L, -1, &len);
+        printf("Execution failed\n%s\n", msg);
+        lua_close(L);
+        exit(EXIT_FAILURE);
     }
 
     lua_close(L);

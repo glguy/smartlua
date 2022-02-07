@@ -19,7 +19,7 @@ local my_version = '0.1'
 
 -- compute the directory that holds state metadata
 local function state_dir(hash)
-    return 'states/' .. hash
+    return 'states/' .. string.sub(hash, 1, 2) .. '/' .. hash
 end
 
 
@@ -112,13 +112,15 @@ local function build_env(signers)
         print = debug_print, -- XXX: temporary
     }
 
-    local env = {}
-    setmetatable(env, {
+    local metaenv = {
         __index = overlay,
         __metatable = true,
-    })
+    }
 
-    return env
+    local env = {}
+    setmetatable(env, metaenv)
+
+    return env, metaenv
 end
 
 -----------------------------------------------------------------------
@@ -177,16 +179,14 @@ local function open_transition(filename)
     return transition
 end
 
-local function step_transition(transition, env, signers, initial)
+local function step_transition(transition, env, metaenv, signers, initial)
     tablex.icopy(signers, transition.signers)
-    local e
-    if initial then
-        e = env
-    else
-        e = readonly(env)
-    end
-    local chunk = assert(load(transition.code, 'transition', 't', e))
+    local chunk = assert(load(transition.code, 'transition', 't', env))
     local result = {assert(pcall(chunk))}
+
+    if initial then
+        metaenv.__newindex = function() error 'readonly' end
+    end
 
     local f = stringio.create()
     serialize(transition, f)
@@ -223,7 +223,7 @@ local function get_state(tophash)
     end
 
     local signers = {}
-    local env = build_env(signers)
+    local env, metaenv = build_env(signers)
 
     for i = #transitions, 1, -1 do
         local initial = i == #transitions
@@ -232,7 +232,7 @@ local function get_state(tophash)
 
         print(string.format(colors'Loading state: %{green}%s', hash))
 
-        local got_hash = step_transition(transition, env, signers, initial)
+        local got_hash = step_transition(transition, env, metaenv, signers, initial)
         assert(got_hash == hash)
 
         for j, pubstr in ipairs(transition.signers) do
@@ -250,7 +250,7 @@ local function get_state(tophash)
         end
     end
 
-    return env, signers, start_hash
+    return env, metaenv, signers, start_hash
 end
 
 -----------------------------------------------------------------------
@@ -267,8 +267,8 @@ function modes.run(...)
     local save = flags.save
 
     local transition = open_transition(filename)
-    local env, signers, start_hash = get_state(transition.previous)
-    local hash = step_transition(transition, env, signers, transition.previous == nil)
+    local env, metaenv, signers, start_hash = get_state(transition.previous)
+    local hash = step_transition(transition, env, metaenv, signers, transition.previous == nil)
 
     if start_hash == nil then
         start_hash = hash
@@ -316,6 +316,8 @@ end
 -- flags
 --   --hash=HASH - load this hash
 --   --head=HASH - load the latest head of this named hash
+--   --code=CODE - literal Lua code as a string
+--   --file=FILE - path to Lua source file
 function modes.inspect(...)
     local flags, params = app.parse_args({...}, Set{'hash', 'head', 'code', 'file'})
     assert(#params == 0, 'no positional parameters expected')
@@ -335,11 +337,11 @@ function modes.inspect(...)
         code = assert(file.read(flags.file), 'unable to read code file')
     end
 
-    local env, signers, _ = get_state(hash)
+    local env, metaenv, signers, _ = get_state(hash)
     if code then
         print(colors'Inspect fragment: %{green}RUNNING')
         local transition = {signers = {}, code = code}
-        local result = {step_transition(transition, env, signers, hash == nil)}
+        local result = {step_transition(transition, env, metaenv, signers, hash == nil)}
         print(table.unpack(result, 2))
     else
         print(colors'Inspect fragment: %{yellow}NONE')
