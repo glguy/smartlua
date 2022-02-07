@@ -43,9 +43,7 @@ end
 
 -- anyone can read a current balance
 function read(who)
-    local balance = balances[who]
-    assert(balance ~= nil)
-    print('Balance for ' .. who .. ': ' .. balance)
+    return balances[who]
 end
 
 -- all the participants can agree to add a new user

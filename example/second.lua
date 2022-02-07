@@ -1,6 +1,6 @@
 {
     smartlua = '0.1',
-    previous = '88f3a298d3fb136b6ab09712def6b3efd616a9c59af15224903a636b1f640718',
+    previous = '2c715a89888b3120a231afce7a179d6731d603b47655fa964757d49df54435e7',
     signers = {
         '9LtcVo7q+at5ihEYtbu+YScb6qlbTt4D7GwlO+3kc+k=',
     },

@@ -6,6 +6,7 @@ local dir = require 'pl.dir'
 local file = require 'pl.file'
 local pretty = require 'pl.pretty'
 local tablex = require 'pl.tablex'
+local Set = require 'pl.Set'
 
 local my_version = '0.1'
 
@@ -167,8 +168,8 @@ local function valid_transition(t)
 end
 
 local function open_transition(filename)
-    local content = assert(file.read(filename))
-    local transition = assert(pretty.read(content))
+    local content = assert(file.read(filename), 'failed to open manifest')
+    local transition = assert(pretty.read(content), 'failed to parse manifest')
     valid_transition(transition)
     return transition
 end
@@ -182,8 +183,8 @@ local function step_transition(transition, env, signers, initial)
         e = readonly(env)
     end
     local chunk = assert(load(transition.code, 'transition', 't', e))
-    assert(pcall(chunk))
-    return sha256(serialize(transition) .. serialize(env))
+    local result = {assert(pcall(chunk))}
+    return sha256(serialize(transition) .. serialize(env)), table.unpack(result, 2)
 end
 
 local function get_state(tophash)
@@ -301,6 +302,40 @@ function modes.keys()
         local key = open_private_key(filename)
         local pub = key:pubstr()
         print(filename, pub)
+    end
+end
+
+-- Run a bit of Lua code in a specified SmartLua state
+-- flags
+--   --hash=HASH - load this hash
+--   --head=HASH - load the latest head of this named hash
+function modes.inspect(...)
+    local flags, params = app.parse_args({...}, Set{'hash', 'head', 'code', 'file'})
+    assert(#params == 0, 'no positional parameters expected')
+
+    local hash
+    if flags.head then
+        hash = assert(file.read(head_path(flags.head)), '--head not found')
+    else
+        hash = flags.hash
+    end
+    print(string.format(colors'Target hash: %{green}%s', hash))
+
+    local code
+    if flags.code then
+        code = flags.code
+    elseif flags.file then
+        code = assert(file.read(flags.file), 'unable to read code file')
+    end
+
+    local env, signers, _ = get_state(hash)
+    if code then
+        print(colors'Inspect fragment: %{green}RUNNING')
+        local transition = {signers = {}, code = code}
+        local result = {step_transition(transition, env, signers, hash == nil)}
+        print(table.unpack(result, 2))
+    else
+        print(colors'Inspect fragment: %{yellow}NONE')
     end
 end
 
