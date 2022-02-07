@@ -4,6 +4,7 @@ local crypto = require 'crypto'
 local app = require 'pl.app'
 local dir = require 'pl.dir'
 local file = require 'pl.file'
+local path = require 'pl.path'
 local pretty = require 'pl.pretty'
 local Set = require 'pl.Set'
 local stringio = require 'pl.stringio'
@@ -20,26 +21,25 @@ local my_version = '0.1'
 
 -- compute the directory that holds state metadata
 local function state_dir(hash)
-    return 'states/' .. string.sub(hash, 1, 2) .. '/' .. hash
+    return path.join('states', string.sub(hash, 1, 2), hash)
 end
 
-
 local function head_path(hash)
-    return 'heads/' .. hash
+    return path.join('heads', hash)
 end
 
 -- compute the path to a transition manifest file
 local function manifest_path(hash)
-    return state_dir(hash) .. '/manifest.lua'
+    return path.join(state_dir(hash), 'manifest.lua')
 end
 
 local function cache_path(hash)
-    return state_dir(hash) .. '/cached_env'
+    return path.join(state_dir(hash), 'cached_env')
 end
 
 -- compute the path to a transition signature
 local function signature_path(hash, i)
-    return state_dir(hash) .. '/sig_' .. i
+    return path.join(state_dir(hash), 'sig_' .. i)
 end
 
 local function keys_dir()

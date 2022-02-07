@@ -48,7 +48,7 @@ function D.table(file, env, refs, uprefs, upixes)
     return t
 end
 
-function D.ref(file, env, refs, uprefs, upixes)
+function D.ref(file, _, refs)
     local n = math.tointeger(file:read())
     return assert(refs[n], 'no such ref')
 end
