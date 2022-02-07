@@ -73,12 +73,16 @@ end
 -- Lua table utilities
 -----------------------------------------------------------------------
 
+local function newindex_readonly(_, n)
+    error(string.format('Attempt to set `%s` on readonly table', n), 2)
+end
+
 local function readonly(t)
     assert(type(t) == 'table')
     local result = {}
     setmetatable(result, {
         __index = t,
-        __newindex = function() error 'readonly' end,
+        __newindex = newindex_readonly,
         __metatable = 'readonly',
         __len = function() return #t end,
     })
@@ -190,11 +194,11 @@ end
 
 local function step_transition(transition, env, metaenv, signers, initial)
     tablex.icopy(signers, transition.signers)
-    local chunk = assert(load(transition.code, 'transition', 't', env))
+    local chunk = assert(load(transition.code, '=(code)', 't', env))
     local result = {assert(pcall(chunk))}
 
     if initial then
-        metaenv.__newindex = function() error 'readonly' end
+        metaenv.__newindex = newindex_readonly
     end
 
     local f = stringio.create()

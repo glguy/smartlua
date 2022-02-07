@@ -89,5 +89,6 @@ return function(file)
         local val = deserialize_value(file, t, refs, uprefs, upixes)
         t[key] = val
     end
+    assert(file:read() == nil) -- no leftofvers allowed
     return t
 end
