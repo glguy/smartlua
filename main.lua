@@ -249,13 +249,13 @@ local function get_state(tophash, debugmode)
         for j, pubstr in ipairs(transition.signers) do
             local sig = file.read(signature_path(hash, j))
             if sig == nil then
-                print(string.format(colors'Signature check %d: %{red}MISSING', j))
+                print(string.format(colors'Signature %d: %{red}MISSING', j))
             else
                 local pub = crypto.publickey(pubstr)
                 if pub:verify(sig, hash) then
-                    print(string.format(colors'Signature check %d: %{green}OK', j))
+                    print(string.format(colors'Signature %d: %{green}OK', j))
                 else
-                    print(string.format(colors'Signature check %d: %{red}FAILED', j))
+                    print(string.format(colors'Signature %d: %{red}FAILED', j))
                 end
             end
         end
@@ -270,10 +270,12 @@ end
 
 local modes = {}
 
+-- flags
+--   --debug     - show transition debug print statements
+--   --save      - save the resulting state
 function modes.run(...)
-
     local flags, params = app.parse_args({...}, {})
-    assert(#params == 1)
+    assert(#params == 1, 'expected a single manifest filename parameter')
     local filename = params[1]
     local save = flags.save
     local debugmode = flags.debug ~= nil
@@ -330,6 +332,7 @@ end
 --   --head=HASH - load the latest head of this named hash
 --   --code=CODE - literal Lua code as a string
 --   --file=FILE - path to Lua source file
+--   --debug     - show transition debug print statements
 function modes.inspect(...)
     local flags, params = app.parse_args({...}, Set{'hash', 'head', 'code', 'file'})
     assert(#params == 0, 'no positional parameters expected')
@@ -341,7 +344,6 @@ function modes.inspect(...)
     else
         hash = flags.hash
     end
-    print(string.format(colors'Target hash: %{green}%s', hash))
 
     local code
     if flags.code then
