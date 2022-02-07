@@ -50,7 +50,7 @@ end
 
 function D.ref(file, env, refs, uprefs, upixes)
     local n = math.tointeger(file:read())
-    return refs[n]
+    return assert(refs[n], 'no such ref')
 end
 
 D['function'] = function(file, env, refs, uprefs, upixes)
