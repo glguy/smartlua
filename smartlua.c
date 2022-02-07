@@ -10,9 +10,9 @@
 int l_serialize(lua_State *L)
 {
     lua_settop(L, 1);
-    lua_newtable(L);
-    lua_newtable(L);
-    lua_newtable(L);
+    lua_newtable(L); // 2 - object to reference id
+    lua_newtable(L); // 3 - upvalueid to reference id
+    lua_newtable(L); // 4 - upvalueid to upvalue index
 
     struct serializer s = {
         .out.bytes = malloc(512),
@@ -25,8 +25,9 @@ int l_serialize(lua_State *L)
     };
 
     serialize_value(&s, L, 1);
-
     lua_pushlstring(L, s.out.bytes, s.out.used);
+    free(s.out.bytes);
+
     return 1;
 }
 
@@ -34,19 +35,22 @@ static int backtrace(lua_State *L)
 {
     size_t len;
     char const* msg = luaL_tolstring(L, 1, &len);
-    luaL_traceback(L, L, msg, 0);
+    luaL_traceback(L, L, msg, 1);
     return 1;
 }
 
 int main(int argc, char **argv)
 {
     lua_State *L = luaL_newstate();
+    if (L == NULL) abort();
+
     luaL_openlibs(L);
 
     lua_pushcfunction(L, l_serialize);
     lua_setglobal(L, "serialize");
 
     luaL_requiref(L, "crypto", luaopen_crypto, 0);
+    lua_pop(L, 1);
 
     lua_pushcfunction(L, backtrace);
     luaL_loadfile(L, "main.lua");
@@ -58,7 +62,10 @@ int main(int argc, char **argv)
 
     if (res != LUA_OK) {
         printf("Execution failed: %s\n", lua_tostring(L, -1));
+        lua_pop(L, 1);
     }
+
+    lua_close(L);
 
     return 0;
 }
