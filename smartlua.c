@@ -5,6 +5,7 @@
 #include "lualib.h"
 
 #include "serialize.h"
+#include "crypto.h"
 
 int l_serialize(lua_State *L)
 {
@@ -36,6 +37,8 @@ int main(int argc, char **argv)
 
     lua_pushcfunction(L, l_serialize);
     lua_setglobal(L, "serialize");
+
+    luaL_requiref(L, "crypto", luaopen_crypto, 0);
 
     luaL_loadfile(L, "main.lua");
     for (int i = 1; i < argc; i++) {

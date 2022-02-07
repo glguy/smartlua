@@ -1,6 +1,5 @@
-
-local openssl = require 'openssl'
 local colors = require 'ansicolors'
+local crypto = require 'crypto'
 
 local app = require 'pl.app'
 local dir = require 'pl.dir'
@@ -38,25 +37,15 @@ end
 -- Crypto support functions
 -----------------------------------------------------------------------
 
+local function sha256(x)
+    local h = crypto.sha256(x)
+    return (string.gsub(h, '.', function(b) return string.format('%02x', string.byte(b)) end))
+end
+
 -- Get the private key object stored in a ed25519 private key PEM
 local function open_private_key(filename)
     local pem = assert(file.read(filename))
-    local key = assert(openssl.pkey.read(pem, true, 'pem'))
-    return key
-end
-
--- Compute the string representation of the public key given a private key
-local function key_to_pub(key)
-    local pubkey = key:get_public()
-    local pubraw = string.sub(pubkey:export('der'), 13, 44)
-    return openssl.base64(pubraw)
-end
-
--- builds an ed25519 DER encoded public key
-local function decode_ed25519(str)
-    local raw = assert(openssl.base64(str, false))
-    local der = "\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00" .. raw
-    return openssl.pkey.read(der, false, 'der')
+    return crypto.privatekey(pem)
 end
 
 -- Open all the keys in the keys directory and return them in a table
@@ -65,7 +54,7 @@ local function get_my_keys()
     local my_keys = {}
     for filename in dir.dirtree(keys_dir()) do
         local key = open_private_key(filename)
-        local pub = key_to_pub(key)
+        local pub = key:pubstr()
         my_keys[pub] = key
     end
     return my_keys
@@ -139,8 +128,7 @@ end
 -- matching the shape of Ed25519 public keys
 local function valid_pubkey(k)
     assert(type(k) == 'string')
-    local raw = assert(openssl.base64(k, false))
-    assert(#raw == 32)
+    crypto.publickey(k)
 end
 
 local function valid_transition(t)
@@ -191,7 +179,7 @@ local function step_transition(transition, env, signers, initial)
     end
     local chunk = assert(load(transition.code, 'transition', 't', e))
     assert(pcall(chunk))
-    return openssl.digest.digest('sha256', serialize(transition) .. serialize(env), false)
+    return sha256(serialize(transition) .. serialize(env))
 end
 
 local function get_state(tophash)
@@ -228,8 +216,8 @@ local function get_state(tophash)
             if sig == nil then
                 print(string.format(colors'Signature check %d: %{red}MISSING', j))
             else
-                local pub = assert(decode_ed25519(pubstr))
-                if pub:verify(hash, sig, '') then
+                local pub = crypto.publickey(pubstr)
+                if pub:verify(sig, hash) then
                     print(string.format(colors'Signature check %d: %{green}OK', j))
                 else
                     print(string.format(colors'Signature check %d: %{red}FAILED', j))
@@ -288,7 +276,7 @@ end
 function modes.keys()
     for filename in dir.dirtree('keys') do
         local key = open_private_key(filename)
-        local pub = key_to_pub(key)
+        local pub = key:pubstr()
         print(filename, pub)
     end
 end
