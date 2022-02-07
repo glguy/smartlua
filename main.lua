@@ -6,7 +6,6 @@ local dir = require 'pl.dir'
 local file = require 'pl.file'
 local pretty = require 'pl.pretty'
 local tablex = require 'pl.tablex'
-local Set = require 'pl.Set'
 
 local my_version = '0.1'
 
@@ -17,6 +16,11 @@ local my_version = '0.1'
 -- compute the directory that holds state metadata
 local function state_dir(hash)
     return 'states/' .. hash
+end
+
+
+local function head_path(hash)
+    return 'heads/' .. hash
 end
 
 -- compute the path to a transition manifest file
@@ -198,6 +202,18 @@ local function get_state(tophash)
         end
     end
 
+    local start_hash = hashes[#hashes]
+    if start_hash ~= nil then
+        local head_hash = file.read(head_path(start_hash))
+        if head_hash == nil then
+            print(colors'Head check: %{red}MISSING')
+        elseif tablex.find(hashes, head_hash) == nil then
+            print(colors'Head check: %{red}FORKED')
+        else
+            print(colors'Head check: %{green}OK')
+        end
+    end
+
     local signers = {}
     local env = build_env(signers)
 
@@ -226,7 +242,7 @@ local function get_state(tophash)
         end
     end
 
-    return env, signers
+    return env, signers, start_hash
 end
 
 -----------------------------------------------------------------------
@@ -243,8 +259,12 @@ function modes.run(...)
     local save = flags.save
 
     local transition = open_transition(filename)
-    local env, signers = get_state(transition.previous)
+    local env, signers, start_hash = get_state(transition.previous)
     local hash = step_transition(transition, env, signers, transition.previous == nil)
+
+    if start_hash == nil then
+        start_hash = hash
+    end
 
     print(colors'Run produced hash: %{green}' .. hash)
 
@@ -266,6 +286,9 @@ function modes.run(...)
                 print('Signature ' .. i .. colors': %{green}SIGNED')
             end
         end
+
+        dir.makepath('heads')
+        file.write(head_path(start_hash), hash)
     else
         print 'Not saving state (use --save)'
     end
