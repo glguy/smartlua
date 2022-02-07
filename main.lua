@@ -10,6 +10,7 @@ local stringio = require 'pl.stringio'
 local tablex = require 'pl.tablex'
 
 local serialize = require 'serialize'
+local deserialize = require 'deserialize'
 
 local my_version = '0.1'
 
@@ -89,7 +90,15 @@ local function debug_print(...)
     print(colors'%{magenta}debug>', ...)
 end
 
-local function build_env(signers)
+local function build_env(signers, debugmode, env)
+
+    local print_impl
+    if debugmode then
+        print_impl = debug_print
+    else
+        print_impl = function() end
+    end
+
     local overlay = {
         string = readonly(string),
         table = readonly(table),
@@ -109,7 +118,7 @@ local function build_env(signers)
         error = error,
         select = select,
 
-        print = debug_print, -- XXX: temporary
+        print = print_impl,
     }
 
     local metaenv = {
@@ -117,7 +126,7 @@ local function build_env(signers)
         __metatable = true,
     }
 
-    local env = {}
+    env = env or {}
     setmetatable(env, metaenv)
 
     return env, metaenv
@@ -191,10 +200,12 @@ local function step_transition(transition, env, metaenv, signers, initial)
     local f = stringio.create()
     serialize(transition, f)
     serialize(env, f)
-    return sha256(f:value()), table.unpack(result, 2)
+    local rep = f:value()
+
+    return sha256(rep), table.unpack(result, 2)
 end
 
-local function get_state(tophash)
+local function get_state(tophash, debugmode)
 
     local transitions = {}
     local hashes = {}
@@ -223,7 +234,7 @@ local function get_state(tophash)
     end
 
     local signers = {}
-    local env, metaenv = build_env(signers)
+    local env, metaenv = build_env(signers, debugmode)
 
     for i = #transitions, 1, -1 do
         local initial = i == #transitions
@@ -265,9 +276,10 @@ function modes.run(...)
     assert(#params == 1)
     local filename = params[1]
     local save = flags.save
+    local debugmode = flags.debug ~= nil
 
     local transition = open_transition(filename)
-    local env, metaenv, signers, start_hash = get_state(transition.previous)
+    local env, metaenv, signers, start_hash = get_state(transition.previous, debugmode)
     local hash = step_transition(transition, env, metaenv, signers, transition.previous == nil)
 
     if start_hash == nil then
@@ -321,6 +333,7 @@ end
 function modes.inspect(...)
     local flags, params = app.parse_args({...}, Set{'hash', 'head', 'code', 'file'})
     assert(#params == 0, 'no positional parameters expected')
+    local debugmode = flags.debug ~= nil
 
     local hash
     if flags.head then
@@ -337,7 +350,7 @@ function modes.inspect(...)
         code = assert(file.read(flags.file), 'unable to read code file')
     end
 
-    local env, metaenv, signers, _ = get_state(hash)
+    local env, metaenv, signers, _ = get_state(hash, debugmode)
     if code then
         print(colors'Inspect fragment: %{green}RUNNING')
         local transition = {signers = {}, code = code}
