@@ -112,23 +112,24 @@ local function build_env(debugmode, env)
     end
 
     local overlay = {
+        math = readonly(math),
         string = readonly(string),
         table = readonly(table),
-        math = readonly(math),
         utf8 = readonly(utf8),
+
         signers = readonly(signers),
 
-        type = type,
         assert = assert,
-        next = next,
-        pcall = pcall,
-        tostring = tostring,
-        tonumber = tonumber,
-        pairs = pairs,
-        ipairs = ipairs,
-        xpcall = xpcall,
         error = error,
+        ipairs = ipairs,
+        next = next,
+        pairs = pairs,
+        pcall = pcall,
         select = select,
+        tonumber = tonumber,
+        tostring = tostring,
+        type = type,
+        xpcall = xpcall,
 
         print = print_impl,
     }
