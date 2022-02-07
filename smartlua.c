@@ -21,7 +21,7 @@ int l_serialize(lua_State *L)
         .refs = 2,
         .upvalrefs = 3,
         .upvalixs = 4,
-        .next_refid = 0,
+        .next_refid = 1,
     };
 
     serialize_value(&s, L, 1);

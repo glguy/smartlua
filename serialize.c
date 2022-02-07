@@ -103,7 +103,7 @@ void serialize_value(struct serializer *s, lua_State *L, int i)
         if (!lua_isnil(L, -1)) {
             ref = lua_tointeger(L, -1);
             lua_pop(L, 1);
-            push_buffer(&s->out, "ref %lld\n", ref);
+            push_buffer(&s->out, "ref\n%lld\n", ref);
             return;
         }
         lua_pop(L, 1);
@@ -127,16 +127,16 @@ void serialize_value(struct serializer *s, lua_State *L, int i)
             break;
         case LUA_TNUMBER:
             if (lua_isinteger(L, i)) {
-                push_buffer(&s->out, "integer %lld\n", lua_tointeger(L, i));
+                push_buffer(&s->out, "integer\n%lld\n", lua_tointeger(L, i));
             } else {
-                push_buffer(&s->out, "number %la\n", lua_tonumber(L, i));
+                push_buffer(&s->out, "number\n%la\n", lua_tonumber(L, i));
             }
             break;
         case LUA_TSTRING:
         {
             size_t len;
             char const* ptr = lua_tolstring(L, i, &len);
-            push_buffer(&s->out, "string %zu\n%s\n", len, ptr); // XXX: handle NUL
+            push_buffer(&s->out, "string\n%zu\n%s\n", len, ptr); // XXX: handle NUL
             break;
         }
         case LUA_TTABLE:
@@ -151,10 +151,21 @@ void serialize_value(struct serializer *s, lua_State *L, int i)
 
 void serialize_function(struct serializer *s, lua_State *L, int ref, int i)
 {
+    struct buffer b = {
+        .bytes = malloc(512),
+        .size = 512,
+        .used = 0,
+    };
+
+    lua_dump(L, serialize_writer, &b, 1/*strip*/);
+    push_buffer(&s->out, "function\n%zu\n", b.used);
+    push_bytes(&s->out, b.bytes, b.used);
+    free(b.bytes);
+
     lua_Debug debug;
     lua_pushvalue(L, i);
     lua_getinfo(L, ">u", &debug);
-    push_buffer(&s->out, "function %hhu\n", debug.nups);
+    push_buffer(&s->out, "\n%hhu\n", debug.nups);
 
     // yes, upvalue indexes start at 1
     for (int upIx = 1; upIx <= debug.nups; upIx++) {
@@ -174,13 +185,12 @@ void serialize_function(struct serializer *s, lua_State *L, int ref, int i)
             lua_pop(L, 1);
         } else {
             lua_rawgetp(L, s->upvalixs, upid);
-            push_buffer(&s->out, "upref %lld %lld\n", lua_tointeger(L, -2), lua_tointeger(L, -1));
+            push_buffer(&s->out, "upref\n%lld\n%lld\n", lua_tointeger(L, -2), lua_tointeger(L, -1));
             lua_pop(L, 2);
         }
     }
 
-    lua_dump(L, serialize_writer, &s->out, 1/*strip*/);
-    push_bytes(&s->out, "\n", 1);
+
 }
 
 void serialize_table(struct serializer *s, lua_State *L, int t)
@@ -226,7 +236,7 @@ void serialize_table(struct serializer *s, lua_State *L, int t)
 
     qsort(keys, key_count, sizeof *keys, compar_tablekey);
 
-    push_buffer(&s->out, "table %lld\n", key_count);
+    push_buffer(&s->out, "table\n%lld\n", key_count);
 
     for (i = 0; i < key_count; i++) {
         switch(keys[i].tag) {
@@ -247,14 +257,14 @@ void serialize_table(struct serializer *s, lua_State *L, int t)
                 break;
 
             case KEY_INTEGER:
-                push_buffer(&s->out, "integer %lld\n", keys[i].val.i);
+                push_buffer(&s->out, "integer\n%lld\n", keys[i].val.i);
                 lua_rawgeti(L, t, keys[i].val.i);
                 serialize_value(s, L, -1);
                 lua_pop(L, 1);
                 break;
 
             case KEY_DOUBLE:
-                push_buffer(&s->out, "number %lf\n", keys[i].val.n); // XXX: needs exact encoding, infinity, etc
+                push_buffer(&s->out, "number\n%lf\n", keys[i].val.n); // XXX: needs exact encoding, infinity, etc
                 lua_pushnumber(L, keys[i].val.n);
                 lua_rawget(L, t);
                 serialize_value(s, L, -1);
@@ -262,7 +272,7 @@ void serialize_table(struct serializer *s, lua_State *L, int t)
                 break;
 
             case KEY_STRING:
-                push_buffer(&s->out, "string %zu\n%s\n", keys[i].val.s.len, keys[i].val.s.ptr); // XXX: handle NUL
+                push_buffer(&s->out, "string\n%zu\n%s\n", keys[i].val.s.len, keys[i].val.s.ptr); // XXX: handle NUL
                 lua_pushlstring(L, keys[i].val.s.ptr, keys[i].val.s.len);
                 lua_rawget(L, t);
                 serialize_value(s, L, -1);
