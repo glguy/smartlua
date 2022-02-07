@@ -98,7 +98,9 @@ local function debug_print(...)
     print(colors'%{magenta}debug>', ...)
 end
 
-local function build_env(signers, debugmode, env)
+local function build_env(debugmode, env)
+
+    local signers = {}
 
     local print_impl
     if debugmode then
@@ -137,7 +139,7 @@ local function build_env(signers, debugmode, env)
     env = env or {}
     setmetatable(env, metaenv)
 
-    return env, metaenv
+    return env, metaenv, signers
 end
 
 -----------------------------------------------------------------------
@@ -241,8 +243,7 @@ local function get_state(tophash, debugmode, usecache)
         end
     end
 
-    local signers = {}
-    local env, metaenv = build_env(signers, debugmode)
+    local env, metaenv, signers = build_env(debugmode)
 
     if usecache then
         print(string.format(colors'Deserializing cached state: %{yellow}%s', tophash))
