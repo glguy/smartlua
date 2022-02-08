@@ -48,28 +48,28 @@ static void mybase64_encode(char const* input, size_t len, char *output)
 
 static int8_t alphabet_values[256] = {
     [0]   =   -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
-          -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
-          -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
-          -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
-          -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
-          -1,   -1,   -1,
+              -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
+              -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
+              -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
+              -1,   -1,   -1,   -1,   -1,   -1,   -1,   -1,
+              -1,   -1,   -1,
     [44]  =   -1,   -1,   -1,
     [58]  =   -1,   -1,   -1,   -1,   -1,   -1,   -1,
     [91]  =   -1,   -1,   -1,   -1,   -1,   -1,
     [123] =   -1,   -1,   -1,   -1,   -1,
     ['A'] = 0x00, 0x01, 0x02, 0x03, 0x04, 0x05, 0x06, 0x07,
-        0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
-        0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
-        0x18, 0x19,
-    ['a'] =         0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
-        0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
-        0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
-        0x30, 0x31, 0x32, 0x33,
+            0x08, 0x09, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f,
+            0x10, 0x11, 0x12, 0x13, 0x14, 0x15, 0x16, 0x17,
+            0x18, 0x19,
+    ['a'] =             0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
+            0x20, 0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27,
+            0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+            0x30, 0x31, 0x32, 0x33,
 
-    ['0'] =             0x34, 0x35, 0x36, 0x37,
-        0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
-    ['+'] =                     0x3e,
-    ['/'] =                       0x3f,
+    ['0'] =                         0x34, 0x35, 0x36, 0x37,
+            0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d,
+    ['+'] =                                     0x3e,
+    ['/'] =                                           0x3f,
 };
 
 static ssize_t mybase64_decode(char const* input, size_t len, char *output)
@@ -79,36 +79,36 @@ static ssize_t mybase64_decode(char const* input, size_t len, char *output)
     size_t length = 0;
 
     for (size_t i = 0; i < len; i++) {
-    int8_t const value = alphabet_values[input[i]];
-    if (0 <= value) {
-        buffer = (buffer << 6) | value;
+        int8_t const value = alphabet_values[input[i]];
+        if (0 <= value) {
+            buffer = (buffer << 6) | value;
 
-        counter++;
+            counter++;
 
-        if (counter == 4) {
-        output[length + 0] = buffer >> (8*2);
-        output[length + 1] = buffer >> (8*1);
-        output[length + 2] = buffer >> (8*0);
-        length += 3;
-        counter = 0;
-        buffer = 0;
+            if (counter == 4) {
+                output[length + 0] = buffer >> (8*2);
+                output[length + 1] = buffer >> (8*1);
+                output[length + 2] = buffer >> (8*0);
+                length += 3;
+                counter = 0;
+                buffer = 0;
+            }
         }
-    }
     }
 
     switch (counter)
     {
-    default: return -1;
-    case 0: return length;
-    case 2:
-        buffer <<= 6*2;
-        output[length + 0] = buffer >> (8*2);
-        return length + 1;
-    case 3:
-        buffer <<= 6*1;
-        output[length + 0] = buffer >> (8*2);
-        output[length + 1] = buffer >> (8*1);
-        return length + 2;
+        default: return -1;
+        case 0: return length;
+        case 2:
+            buffer <<= 6*2;
+            output[length + 0] = buffer >> (8*2);
+            return length + 1;
+        case 3:
+            buffer <<= 6*1;
+            output[length + 0] = buffer >> (8*2);
+            output[length + 1] = buffer >> (8*1);
+            return length + 2;
     }
 }
 
@@ -388,10 +388,8 @@ static const luaL_Reg pkeylib[] = {
 int luaopen_crypto(lua_State *L)
 {
     if (luaL_newmetatable(L, "EVP_PKEY")) {
-        
         lua_pushcfunction(L, l_free_evp);
         lua_setfield(L, -2, "__gc");
-        
         luaL_newlib(L, pkeylib);
         lua_setfield(L, -2, "__index");
     }
