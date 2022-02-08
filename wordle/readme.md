@@ -29,9 +29,15 @@ giveclue 'YYBYB'
 ```
 
 The game proceeds until a player wins by receiving a `'GGGGG'` clue response or
-by exhausting all 6 word guesses without getting a winning response.
+by exhausting all 6 word guesses without getting a winning response. This updates
+the state to `playerwins`
 
-If the player runs out of turns the host must reveal the nonce and goal word.
-These must satisfy the commitment hash given at the beginning of the game, and
-the final word much satisfy all the clues issues during the game to confirm that
-the player has lost.
+If the player runs out of turns the host must reveal the nonce and goal word when
+revealing the final incomplete clue. These arguments must satisfy the commitment
+hash given at the beginning of the game and satisfy all the clues issues during
+the game to confirm that the player has lost. Successfully executing this will
+update the state to `playerlose`
+
+```lua
+giveclue('YBYBY', initialNonce, answer)
+```
