@@ -67,7 +67,7 @@ local function get_my_keys()
     local my_keys = {}
     local d = keys_dir()
     dir.makepath(d)
-    for filename in dir.dirtree() do
+    for filename in dir.dirtree(d) do
         local key = open_private_key(filename)
         local pub = key:pubstr()
         my_keys[pub] = key
@@ -112,6 +112,7 @@ local function build_env(debugmode, env)
     end
 
     local overlay = {
+        coroutine = readonly(coroutine),
         math = readonly(math),
         string = readonly(string),
         table = readonly(table),
@@ -130,6 +131,8 @@ local function build_env(debugmode, env)
         tostring = tostring,
         type = type,
         xpcall = xpcall,
+
+        sha256 = sha256,
 
         print = print_impl,
     }
