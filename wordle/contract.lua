@@ -11,7 +11,15 @@ local words = {}
 local clues = {}
 
 function getstate()
-    return pending
+    return pending, table.concat(words, ','), table.concat(clues, ',')
+end
+
+function mkcommitment(nonce, word)
+    assert(type(nonce) == 'string')
+    assert(#nonce == 16)
+    assert(type(word) == 'string')
+    assert(string.match(word, '^%u%u%u%u%u$'))
+    return sha256(nonce .. word)
 end
 
 function startgame(commitment_, playerpub_)
@@ -73,20 +81,16 @@ function giveclue(clue, nonce, answer)
 
     assert(type(clue) == 'string')
     assert(string.match(clue, '^[BYG][BYG][BYG][BYG][BYG]$'))
-    
+
+    table.insert(clues, clue)
+
     if clue == 'GGGGG' then
         pending = 'playerwins'
     else
-        table.insert(clues, clue)
-
         if #clues < 6 then
             pending = 'word'
         else
-            assert(type(nonce) == 'string')
-            assert(#nonce == 16)
-            assert(type(answer) == 'string')
-            assert(string.match(answer, '^%u%u%u%u%u$'))
-            assert(sha256(nonce .. answer) == commitment)
+            assert(mkcommitment(nonce, answer) == commitment)
             for i = 1, 6 do
                 checkclue(answer, words[i], clues[i])
             end
