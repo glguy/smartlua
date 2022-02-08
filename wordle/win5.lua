@@ -1,6 +1,6 @@
 {
     smartlua = '0.1',
     signers = {'9LtcVo7q+at5ihEYtbu+YScb6qlbTt4D7GwlO+3kc+k='},
-    previous = '4e5f81d1259a34d313411e4a725df5f263d7d582e8a02fbe0c15bb4d5615a6ef',
+    previous = '6e2914dcd3822e8cf1d5fbc7e9655ac3b4edd74919110a6c3143f210c27b442d',
     code = [[giveclue 'BBGGY']]
 }

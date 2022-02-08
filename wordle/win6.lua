@@ -1,6 +1,6 @@
 {
     smartlua = '0.1',
     signers = {'68A3esZ9Ausdi05f6OCKs0e4qdwsbGlrSRzcHQ7WLEY='},
-    previous = 'b32809c36748a40a3de3ddc70024670ea8204a07ea59452096bc15c6ba1b3153',
+    previous = '0e301dc4d61ebd86ccbf33145c8053e386ffdfb2c8ad69f0119669ec924ecbc6',
     code = [[guessword 'ELDER']]
 }

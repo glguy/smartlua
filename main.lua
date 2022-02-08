@@ -30,7 +30,7 @@ end
 
 -- compute the path to a transition manifest file
 local function manifest_path(hash)
-    return path.join(state_dir(hash), 'manifest.lua')
+    return path.join(state_dir(hash), 'manifest')
 end
 
 local function cache_path(hash)
@@ -51,7 +51,7 @@ end
 -----------------------------------------------------------------------
 
 local function sha256(x)
-    local h = crypto.sha256(x)
+    local h = crypto.digest('sha256', x)
     return (string.gsub(h, '.', function(b) return string.format('%02x', string.byte(b)) end))
 end
 
@@ -117,6 +117,7 @@ local function build_env(debugmode, env)
         string = readonly(string),
         table = readonly(table),
         utf8 = readonly(utf8),
+        crypto = readonly(crypto),
 
         signers = readonly(signers),
 
@@ -131,8 +132,6 @@ local function build_env(debugmode, env)
         tostring = tostring,
         type = type,
         xpcall = xpcall,
-
-        sha256 = sha256,
 
         print = print_impl,
     }
@@ -204,6 +203,15 @@ local function open_transition(filename)
     return transition
 end
 
+local function open_manifest(hash)
+    local manifestfile = io.open(manifest_path(hash))
+    local manifest = {}
+    deserialize(manifest, manifestfile)
+    manifestfile:close()
+    valid_transition(manifest)
+    return manifest
+end
+
 local function step_transition(transition, env, metaenv, signers, initial)
     tablex.icopy(signers, transition.signers)
     local chunk = assert(load(transition.code, '=(code)', 't', env))
@@ -218,7 +226,7 @@ local function step_transition(transition, env, metaenv, signers, initial)
     serialize(env, f)
     local rep = f:value()
 
-    return sha256(rep), table.unpack(result, 2)
+    return sha256(rep), rep, table.unpack(result, 2)
 end
 
 local function get_state(tophash, debugmode, usecache)
@@ -229,8 +237,7 @@ local function get_state(tophash, debugmode, usecache)
     do
         local hash = tophash
         while hash ~= nil do
-            local transition = open_transition(manifest_path(hash))
-
+            local transition = open_manifest(hash)
             table.insert(transitions, transition)
             table.insert(hashes, hash)
             hash = transition.previous
@@ -266,7 +273,7 @@ local function get_state(tophash, debugmode, usecache)
 
         print(string.format(colors'Loading state: %{green}%s', hash))
 
-        local got_hash = step_transition(transition, env, metaenv, signers, initial)
+        local got_hash, rep = step_transition(transition, env, metaenv, signers, initial)
         assert(got_hash == hash)
 
         for j, pubstr in ipairs(transition.signers) do
@@ -275,7 +282,7 @@ local function get_state(tophash, debugmode, usecache)
                 print(string.format(colors'Signature %d: %{red}MISSING', j))
             else
                 local pub = crypto.publickey(pubstr)
-                if pub:verify(sig, hash) then
+                if pub:verify(sig, rep) then
                     print(string.format(colors'Signature %d: %{green}OK', j))
                 else
                     print(string.format(colors'Signature %d: %{red}FAILED', j))
@@ -306,19 +313,22 @@ function modes.run(...)
 
     local transition = open_transition(filename)
     local env, metaenv, signers, start_hash = get_state(transition.previous, debugmode, usecache)
-    local hash = step_transition(transition, env, metaenv, signers, transition.previous == nil)
+    local hash, rep = step_transition(transition, env, metaenv, signers, transition.previous == nil)
 
     if start_hash == nil then
         start_hash = hash
     end
 
-    print(colors'Run produced hash: %{green}' .. hash)
+    print(string.format(colors'Run produced hash: %{green}%s', hash))
 
     -- save the new state
     if save then
         print 'Saving state...'
         dir.makepath(state_dir(hash))
-        file.copy(filename, manifest_path(hash))
+
+        local manifestfile = io.open(manifest_path(hash), 'w')
+        serialize(transition, manifestfile)
+        manifestfile:close()
 
         -- sign to state with all relevant private keys
         local my_keys = get_my_keys()
@@ -327,7 +337,7 @@ function modes.run(...)
             if key == nil then
                 print('Signature ' .. i .. colors': %{red}SKIPPED')
             else
-                local sig = key:sign(hash, '')
+                local sig = key:sign(rep, '')
                 file.write(signature_path(hash, i), sig)
                 print('Signature ' .. i .. colors': %{green}SIGNED')
             end
@@ -386,7 +396,7 @@ function modes.inspect(...)
         print(colors'Inspect fragment: %{green}RUNNING')
         local transition = {signers = {}, code = code}
         local result = {step_transition(transition, env, metaenv, signers, hash == nil)}
-        print(table.unpack(result, 2))
+        print(table.unpack(result, 3))
     else
         print(colors'Inspect fragment: %{yellow}NONE')
     end

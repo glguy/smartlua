@@ -14,12 +14,12 @@ function getstate()
     return pending, table.concat(words, ','), table.concat(clues, ',')
 end
 
-function mkcommitment(nonce, word)
-    assert(type(nonce) == 'string')
-    assert(#nonce == 16)
+function mkcommitment(secret, word)
+    assert(type(secret) == 'string')
+    assert(#secret == 16)
     assert(type(word) == 'string')
     assert(string.match(word, '^%u%u%u%u%u$'))
-    return sha256(nonce .. word)
+    return crypto.base64e(crypto.hmac('sha256', secret, word))
 end
 
 function startgame(commitment_, playerpub_)
@@ -74,7 +74,7 @@ local function checkclue(answer, word, clue)
     end
 end
 
-function giveclue(clue, nonce, answer)
+function giveclue(clue, secret, answer)
     assert(pending == 'clue')
     assert(#signers == 1)
     assert(signers[1] == hostpub)
@@ -90,7 +90,7 @@ function giveclue(clue, nonce, answer)
         if #clues < 6 then
             pending = 'word'
         else
-            assert(mkcommitment(nonce, answer) == commitment)
+            assert(mkcommitment(secret, answer) == commitment)
             for i = 1, 6 do
                 checkclue(answer, words[i], clues[i])
             end

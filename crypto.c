@@ -4,6 +4,7 @@
 #include <openssl/bio.h>
 #include <openssl/err.h>
 #include <openssl/evp.h>
+#include <openssl/hmac.h>
 #include <openssl/pem.h>
 
 #include <stdlib.h>
@@ -111,24 +112,72 @@ static ssize_t mybase64_decode(char const* input, size_t len, char *output)
     }
 }
 
-
-static int l_sha256(lua_State *L)
+static EVP_MD const* digestarg(lua_State *L, int i)
 {
-        size_t data_len;
-        char const* data = luaL_checklstring(L, 1, &data_len);
-
-        const EVP_MD *md;
-        md = EVP_get_digestbyname("sha256");
+        char const* name = luaL_checkstring(L, i);
+        EVP_MD const* md = EVP_get_digestbyname(name);
         if (md == NULL) {
+                ERR_clear_error();
+                luaL_argerror(L, i, "unknown hash");
+        }
+        return md;
+}
+
+static int l_base64e(lua_State *L)
+{
+        size_t len;
+        char const* data = luaL_checklstring(L, 1, &len);
+        size_t const out_len = (len+2)/3*4+1;
+        luaL_Buffer B;
+        luaL_buffinitsize(L, &B, out_len);
+        mybase64_encode(data, len, B.b);
+        luaL_pushresultsize(&B, out_len-1); // don't push NUL
+        return 1;
+}
+
+static int l_base64d(lua_State *L)
+{
+        size_t len;
+        char const* data = luaL_checklstring(L, 1, &len);
+        luaL_Buffer B;
+        luaL_buffinitsize(L, &B, (len+3)/4*3+1);
+        ssize_t out_len = mybase64_decode(data, len, B.b);
+        if (out_len < 0) {
+                return luaL_error(L, "invalid base64");
+        }
+        luaL_pushresultsize(&B, out_len);
+        return 1;
+}
+
+static int l_hmac(lua_State *L)
+{
+        EVP_MD const* md = digestarg(L, 1);
+        size_t key_len, data_len;
+        char const* key = luaL_checklstring(L, 2, &key_len);
+        char const* data = luaL_checklstring(L, 3, &data_len);
+
+        unsigned char digest[EVP_MAX_MD_SIZE];
+        unsigned int digest_len = sizeof digest;
+        unsigned char *result = HMAC(md, key, key_len, (unsigned char const*)data, data_len, digest, &digest_len);
+        if (result == NULL) {
                 unsigned long err = ERR_get_error();
                 ERR_clear_error();
-                return luaL_error(L, "sha256 not found! (%lu)", err);
+                return luaL_error(L, "HMAC error (%lu)", err);
         }
+
+        lua_pushlstring(L, (char const*)digest, digest_len);
+        return 1;
+}
+
+static int l_digest(lua_State *L)
+{
+        const EVP_MD *md = digestarg(L, 1);
+        size_t data_len;
+        char const* data = luaL_checklstring(L, 2, &data_len);
 
         unsigned char out[EVP_MAX_MD_SIZE];
         unsigned int out_len;
         int result = EVP_Digest(data, data_len, out, &out_len, md, NULL);
-
         if (result == 0) {
                 unsigned long err = ERR_get_error();
                 ERR_clear_error();
@@ -320,7 +369,10 @@ static int l_verify(lua_State *L)
 }
 
 static const luaL_Reg cryptolib[] = {
-        {"sha256", l_sha256},
+        {"digest", l_digest},
+        {"hmac", l_hmac},
+        {"base64e", l_base64e},
+        {"base64d", l_base64d},
         {"publickey", l_publickey},
         {"privatekey", l_privatekey},
         {}
