@@ -24,8 +24,8 @@ local function state_dir(hash)
     return path.join('states', string.sub(hash, 1, 2), hash)
 end
 
-local function head_path(hash)
-    return path.join('heads', hash)
+local function head_path()
+    return path.join('states', 'heads')
 end
 
 -- compute the path to a transition manifest file
@@ -199,13 +199,6 @@ local function valid_transition(t)
     assert(next(t) == nil)
 end
 
-local function open_transition(filename)
-    local content = assert(file.read(filename), 'failed to open manifest')
-    local transition = assert(pretty.read(content), 'failed to parse manifest')
-    valid_transition(transition)
-    return transition
-end
-
 local function open_manifest(hash)
     local manifestfile = io.open(manifest_path(hash))
     local manifest = {}
@@ -247,18 +240,6 @@ local function get_state(tophash, debugmode, usecache)
         end
     end
 
-    local start_hash = hashes[#hashes]
-    if start_hash ~= nil then
-        local head_hash = file.read(head_path(start_hash))
-        if head_hash == nil then
-            print(colors'Head check: %{red}MISSING')
-        elseif tablex.find(hashes, head_hash) == nil then
-            print(colors'Head check: %{red}FORKED')
-        else
-            print(colors'Head check: %{green}OK')
-        end
-    end
-
     local env, metaenv, signers = build_env(debugmode)
 
     if usecache then
@@ -266,7 +247,7 @@ local function get_state(tophash, debugmode, usecache)
         local cachefile = io.open(cache_path(tophash))
         deserialize(env, cachefile)
         metaenv.__newindex = newindex_readonly
-        return env, metaenv, signers, start_hash
+        return env, metaenv, signers
     end
 
     for i = #transitions, 1, -1 do
@@ -294,7 +275,7 @@ local function get_state(tophash, debugmode, usecache)
         end
     end
 
-    return env, metaenv, signers, start_hash
+    return env, metaenv, signers
 end
 
 -----------------------------------------------------------------------
@@ -307,20 +288,29 @@ local modes = {}
 --   --debug     - show transition debug print statements
 --   --save      - save the resulting state
 function modes.run(...)
-    local flags, params = app.parse_args({...}, {})
-    assert(#params == 1, 'expected a single manifest filename parameter')
+    local flags, params = app.parse_args({...}, Set{'head'})
+    assert(#params > 0, 'expected a single manifest filename parameter')
     local filename = params[1]
     local save = flags.save
     local debugmode = flags.debug ~= nil
     local usecache = flags.cached ~= nil
+    local previous = flags.head
 
-    local transition = open_transition(filename)
-    local env, metaenv, signers, start_hash = get_state(transition.previous, debugmode, usecache)
-    local hash, rep = step_transition(transition, env, metaenv, signers, transition.previous == nil)
+    local code = assert(file.read(filename))
 
-    if start_hash == nil then
-        start_hash = hash
+    if previous == nil then
+        previous = file.read(head_path())
     end
+
+    local transition = {
+        smartlua = my_version,
+        signers = tablex.sub(params, 2),
+        previous = previous,
+        code = code,
+    }
+
+    local env, metaenv, signers = get_state(previous, debugmode, usecache)
+    local hash, rep = step_transition(transition, env, metaenv, signers, transition.previous == nil)
 
     print(string.format(colors'Run produced hash: %{green}%s', hash))
 
@@ -346,12 +336,11 @@ function modes.run(...)
             end
         end
 
-        dir.makepath('heads')
-        file.write(head_path(start_hash), hash)
-
         local cachefile = io.open(cache_path(hash), 'w')
         serialize(env, cachefile)
         cachefile:close()
+
+        file.write(head_path(), hash)
     else
         print 'Not saving state (use --save)'
     end
@@ -375,16 +364,16 @@ end
 --   --file=FILE - path to Lua source file
 --   --debug     - show transition debug print statements
 function modes.inspect(...)
-    local flags, params = app.parse_args({...}, Set{'hash', 'head', 'code', 'file'})
+    local flags, params = app.parse_args({...}, Set{'hash', 'code', 'file'})
     assert(#params == 0, 'no positional parameters expected')
     local debugmode = flags.debug ~= nil
     local usecache = flags.cached ~= nil
 
     local hash
-    if flags.head then
-        hash = assert(file.read(head_path(flags.head)), '--head not found')
-    else
+    if flags.hash then
         hash = flags.hash
+    else
+        hash = assert(file.read(head_path()), 'head not found')
     end
 
     local code
@@ -394,7 +383,7 @@ function modes.inspect(...)
         code = assert(file.read(flags.file), 'unable to read code file')
     end
 
-    local env, metaenv, signers, _ = get_state(hash, debugmode, usecache)
+    local env, metaenv, signers = get_state(hash, debugmode, usecache)
     if code then
         print(colors'Inspect fragment: %{green}RUNNING')
         local transition = {signers = {}, code = code}

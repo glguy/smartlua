@@ -14,28 +14,32 @@ local function serialize_value(v, file, refs, uprefs, upixes)
 end
 
 function S.boolean(v, file)
-    utils.fprintf(file, "%s\n", v)
+    if v then
+        file:write 'T\n'
+    else
+        file:write 'F\n'
+    end
 end
 
 S['nil'] = function(_, file)
-    file:write 'nil\n'
+    file:write 'N\n'
 end
 
 function S.string(v, file)
-    utils.fprintf(file, "string\n%d\n%s\n", #v, v)
+    utils.fprintf(file, "S\n%d\n%s\n", #v, v)
 end
 
 function S.number(v, file)
     if v == math.huge then
-        utils.fprintf(file, "inf\n")
+        utils.fprintf(file, "I\n")
     elseif -v == math.huge then
-        utils.fprintf(file, "neginf\n")
+        utils.fprintf(file, "i\n")
     elseif v ~= v then
-        utils.fprintf(file, "nan\n")
+        utils.fprintf(file, "E\n")
     elseif math.type(v) == 'integer' then
-        utils.fprintf(file, "integer\n%d\n", v)
+        utils.fprintf(file, "Z\n%d\n", v)
     else
-        utils.fprintf(file, "number\n%a\n", v)
+        utils.fprintf(file, "D\n%a\n", v)
     end
 end
 
@@ -45,7 +49,7 @@ local function heap_case(v, file, refs)
     end
     local me = refs[v]
     if me ~= nil then
-        utils.fprintf(file, "ref\n%d\n", me)
+        utils.fprintf(file, "R\n%d\n", me)
     else
         me = refs.n + 1
         refs[v] = me
@@ -56,7 +60,7 @@ end
 
 function S.table(t, file, refs, uprefs, upixes)
     if heap_case(t, file, refs) then
-        utils.fprintf(file, "table\n%d\n", tablex.size(t))
+        utils.fprintf(file, "t\n%d\n", tablex.size(t))
         for k, v in tablex.sort(t) do
             serialize_value(k, file)
             serialize_value(v, file, refs, uprefs, upixes)
@@ -69,12 +73,12 @@ S['function'] = function(f, file, refs, uprefs, upixes)
     if me then
         local bitcode = string.dump(f, true)
         local nups = debug.getinfo(f, 'u').nups
-        utils.fprintf(file, "function\n%d\n%s\n%d\n", #bitcode, bitcode, nups)
+        utils.fprintf(file, "f\n%d\n%s\n%d\n", #bitcode, bitcode, nups)
 
         for i = 1, nups do
             local uid = debug.upvalueid(f, i)
             if uprefs[uid] then
-                utils.fprintf(file, "upref\n%d\n%d\n", uprefs[uid], upixes[uid])
+                utils.fprintf(file, "U\n%d\n%d\n", uprefs[uid], upixes[uid])
             else
                 uprefs[uid] = me
                 upixes[uid] = i

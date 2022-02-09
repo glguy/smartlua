@@ -5,38 +5,37 @@ end
 
 local D = {}
 
-
 local function deserialize_value(file, env, refs, uprefs, upixes)
     local t = file:read()
     return D[t](file, env, refs, uprefs, upixes)
 end
 
-D['true'] = function() return true end
-D['false'] = function() return false end
-D['nil'] = function() return nil end
+D['T'] = function() return true end
+D['F'] = function() return false end
+D['N'] = function() return nil end
 
-function D.inf() return math.huge end
-function D.neginf() return -math.huge end
-function D.nan() return 0/0 end
+D['I'] = function() return math.huge end
+D['i'] = function() return -math.huge end
+D['E'] = function() return 0/0 end
 
-function D.integer(file)
+D['Z'] = function(file)
     local line = file:read()
     return math.tointeger(line)
 end
 
-function D.number(file)
+D['D'] = function(file)
     local line = file:read()
     return tonumber(line)
 end
 
-function D.string(file)
+D['S'] = function(file)
     local len = math.tointeger(file:read())
     local str = file:read(len)
     assert(file:read() == '')
     return str
 end
 
-function D.table(file, env, refs, uprefs, upixes)
+D['t'] = function(file, env, refs, uprefs, upixes)
     local t = {}
     addref(t, refs)
     local n = math.tointeger(file:read())
@@ -48,12 +47,12 @@ function D.table(file, env, refs, uprefs, upixes)
     return t
 end
 
-function D.ref(file, _, refs)
+D['R'] = function(file, _, refs)
     local n = math.tointeger(file:read())
     return assert(refs[n], 'no such ref')
 end
 
-D['function'] = function(file, env, refs, uprefs, upixes)
+D['f'] = function(file, env, refs, uprefs, upixes)
     local n = math.tointeger(file:read())
     local bc = file:read(n)
     assert(file:read() == '')
@@ -69,7 +68,7 @@ D['function'] = function(file, env, refs, uprefs, upixes)
 
     for i = 1, u do
         local tag = file:read()
-        if tag == 'upref' then
+        if tag == 'U' then
             local refid = math.tointeger(file:read())
             local g = refs[refid]
             local upid = math.tointeger(file:read())
@@ -84,7 +83,7 @@ end
 
 return function(t, file)
     local refs, uprefs, upixes = {}, {}, {}
-    assert(file:read() == 'table')
+    assert(file:read() == 't')
     addref(t, refs)
     local n = math.tointeger(file:read())
     for _ = 1, n do
