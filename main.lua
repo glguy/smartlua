@@ -25,7 +25,7 @@ local function state_dir(hash)
 end
 
 local function head_path()
-    return path.join('states', 'heads')
+    return path.join('states', 'head')
 end
 
 -- compute the path to a transition manifest file
@@ -176,9 +176,9 @@ local function valid_transition(t)
     assert(t.smartlua == my_version)
     t.smartlua = nil
 
-    if t.previous then
-        valid_hash(t.previous)
-        t.previous = nil
+    if t.parent then
+        valid_hash(t.parent)
+        t.parent = nil
     end
 
     assert(type(t.signers) == 'table')
@@ -236,7 +236,7 @@ local function get_state(tophash, debugmode, usecache)
             local transition = open_manifest(hash)
             table.insert(transitions, transition)
             table.insert(hashes, hash)
-            hash = transition.previous
+            hash = transition.parent
         end
     end
 
@@ -284,9 +284,11 @@ end
 
 local modes = {}
 
+-- Usage: run FILENAME [PUBKEY...]
 -- flags
 --   --debug     - show transition debug print statements
 --   --save      - save the resulting state
+--   --head=HASH - override the current chain head
 function modes.run(...)
     local flags, params = app.parse_args({...}, Set{'head'})
     assert(#params > 0, 'expected a single manifest filename parameter')
@@ -294,23 +296,25 @@ function modes.run(...)
     local save = flags.save
     local debugmode = flags.debug ~= nil
     local usecache = flags.cached ~= nil
-    local previous = flags.head
+    local parent = flags.head
+    local signers = tablex.sub(params, 2)
 
     local code = assert(file.read(filename))
 
-    if previous == nil then
-        previous = file.read(head_path())
+    if parent == nil then
+        parent = file.read(head_path())
     end
 
-    local transition = {
+    local manifest = {
         smartlua = my_version,
-        signers = tablex.sub(params, 2),
-        previous = previous,
+        signers = signers,
+        parent = parent,
         code = code,
     }
 
-    local env, metaenv, signers = get_state(previous, debugmode, usecache)
-    local hash, rep = step_transition(transition, env, metaenv, signers, transition.previous == nil)
+    local initial = parent == nil
+    local env, metaenv, signers_table = get_state(parent, debugmode, usecache)
+    local hash, rep = step_transition(manifest, env, metaenv, signers_table, initial)
 
     print(string.format(colors'Run produced hash: %{green}%s', hash))
 
@@ -320,12 +324,12 @@ function modes.run(...)
         dir.makepath(state_dir(hash))
 
         local manifestfile = io.open(manifest_path(hash), 'w')
-        serialize(transition, manifestfile)
+        serialize(manifest, manifestfile)
         manifestfile:close()
 
         -- sign to state with all relevant private keys
         local my_keys = get_my_keys()
-        for i, pub in ipairs(transition.signers) do
+        for i, pub in ipairs(signers) do
             local key = my_keys[pub]
             if key == nil then
                 print('Signature ' .. i .. colors': %{red}SKIPPED')
@@ -358,7 +362,6 @@ end
 
 -- Run a bit of Lua code in a specified SmartLua state
 -- flags
---   --hash=HASH - load this hash
 --   --head=HASH - load the latest head of this named hash
 --   --code=CODE - literal Lua code as a string
 --   --file=FILE - path to Lua source file
@@ -370,8 +373,8 @@ function modes.inspect(...)
     local usecache = flags.cached ~= nil
 
     local hash
-    if flags.hash then
-        hash = flags.hash
+    if flags.head then
+        hash = flags.head
     else
         hash = assert(file.read(head_path()), 'head not found')
     end

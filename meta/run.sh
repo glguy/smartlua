@@ -1,7 +1,7 @@
 PUB1="9LtcVo7q+at5ihEYtbu+YScb6qlbTt4D7GwlO+3kc+k="
 PUB2="68A3esZ9Ausdi05f6OCKs0e4qdwsbGlrSRzcHQ7WLEY="
 
-rm head
+rm states/head
 build/smartlua run --save meta/00-root.lua
 
 build/smartlua run --cached --save meta/01-wordle.lua $PUB1
