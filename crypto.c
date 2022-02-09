@@ -8,6 +8,7 @@
 #include <openssl/pem.h>
 
 #include <stdlib.h>
+#include <string.h>
 
 #include "crypto.h"
 
@@ -188,10 +189,29 @@ static int l_digest(lua_State *L)
     return 1;
 }
 
+struct sized_password
+{
+    size_t len;
+    char const* ptr;
+};
+
+static int give_password(char *buf, int size, int rwflag, void *u)
+{
+    struct sized_password *s = u;
+    if (size < s->len) {
+        return -1;
+    }
+    memcpy(buf, s->ptr, s->len);
+    return s->len;
+}
+
 static int l_privatekey_pem(lua_State *L)
 {
     size_t pem_len;
     char const* pem = luaL_checklstring(L, 1, &pem_len);
+    
+    struct sized_password password;
+    password.ptr = luaL_optlstring(L, 2, NULL, &password.len);
 
     BIO *bio = BIO_new_mem_buf(pem, pem_len);
     if (bio == NULL) {
@@ -200,7 +220,7 @@ static int l_privatekey_pem(lua_State *L)
         return luaL_error(L, "BIO_new_mem_buf failed (%lu)", err);
     }
 
-    EVP_PKEY *key = PEM_read_bio_PrivateKey(bio, NULL, NULL, NULL);
+    EVP_PKEY *key = PEM_read_bio_PrivateKey(bio, NULL, give_password, &password);
     BIO_free_all(bio);
 
     if (key == NULL) {
