@@ -374,6 +374,21 @@ function modes.keys()
     end
 end
 
+function modes.show(hash)
+    local manifest = open_manifest(hash)
+    print(string.format(colors'Version:\t%{green}%s', manifest.smartlua))
+    if manifest.parent then
+        print(string.format(colors'Parent state:\t%{green}%s', manifest.parent))
+    else
+        print(string.format(colors'Parent state:\t%{cyan}ROOT'))
+    end
+    for i, s in ipairs(manifest.signers) do
+        print(string.format(colors'Signer %d:\t%{green}%s', i, s))
+    end
+    print()
+    print(manifest.code)
+end
+
 local function dispatch(cmd, ...)
     local mode = assert(modes[cmd], 'unknown command')
     mode(...)
