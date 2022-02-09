@@ -100,4 +100,5 @@ function M.startgame(commitment_, playerpub_)
     pending = 'word'
 end
 
-register(function(method, ...) return M[method](...) end)
+local gameid = register(function(method, ...) return M[method](...) end)
+print('Wordle started on entry ' .. gameid)

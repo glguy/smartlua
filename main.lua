@@ -97,7 +97,7 @@ end
 
 -- printing function used when transition fragments print
 local function debug_print(...)
-    print(colors'%{magenta}debug>', ...)
+    print(colors'%{magenta}print>', ...)
 end
 
 local function build_env(debugmode)
@@ -226,7 +226,6 @@ local function step_transition(transition, env, metaenv, signers, initial)
 end
 
 local function get_state(tophash, debugmode, usecache)
-
     local transitions = {}
     local hashes = {}
 
@@ -243,7 +242,7 @@ local function get_state(tophash, debugmode, usecache)
     local env, metaenv, signers = build_env(debugmode)
 
     if usecache then
-        print(string.format(colors'Deserializing cached state: %{yellow}%s', tophash))
+        print(string.format(colors'Cached state:\t%{yellow}%s', tophash))
         local cachefile = io.open(cache_path(tophash))
         deserialize(env, cachefile)
         metaenv.__newindex = newindex_readonly
@@ -255,8 +254,7 @@ local function get_state(tophash, debugmode, usecache)
         local transition = transitions[i]
         local hash = hashes[i]
 
-        print(string.format(colors'Loading state: %{green}%s', hash))
-
+        print(string.format(colors'Running state: %{green}%s', hash))
         local got_hash, rep = step_transition(transition, env, metaenv, signers, initial)
         assert(got_hash == hash)
 
@@ -267,7 +265,7 @@ local function get_state(tophash, debugmode, usecache)
             else
                 local pub = crypto.publickey(pubstr)
                 if pub:verify(sig, rep) then
-                    print(string.format(colors'Signature %d: %{green}OK', j))
+                    print(string.format(colors'Signature %d: %{green}PASSED', j))
                 else
                     print(string.format(colors'Signature %d: %{red}FAILED', j))
                 end
@@ -290,7 +288,7 @@ local modes = {}
 --   --save      - save the resulting state
 --   --head=HASH - override the current chain head
 function modes.run(...)
-    local flags, params = app.parse_args({...}, Set{'head'})
+    local flags, params = assert(app.parse_args({...}, Set{'head'}, Set{'save', 'debug', 'cached'}))
     assert(#params > 0, 'expected a single manifest filename parameter')
     local filename = params[1]
     local save = flags.save
@@ -299,7 +297,12 @@ function modes.run(...)
     local parent = flags.head
     local signers = tablex.sub(params, 2)
 
-    local code = assert(file.read(filename))
+    local code
+    if filename == '-' then
+        code = io.read 'a'
+    else
+        code = assert(file.read(filename))
+    end
 
     if parent == nil then
         parent = file.read(head_path())
@@ -314,13 +317,17 @@ function modes.run(...)
 
     local initial = parent == nil
     local env, metaenv, signers_table = get_state(parent, debugmode, usecache)
-    local hash, rep = step_transition(manifest, env, metaenv, signers_table, initial)
+    local result = {step_transition(manifest, env, metaenv, signers_table, initial)}
+    local hash, rep = table.unpack(result, 1, 2)
 
-    print(string.format(colors'Run produced hash: %{green}%s', hash))
+    if debugmode and #result > 2 then
+        print(colors'%{magenta}result>', table.unpack(result, 3))
+    end
+
+    print(string.format(colors'New state:\t%{green}%s', hash))
 
     -- save the new state
     if save then
-        print 'Saving state...'
         dir.makepath(state_dir(hash))
 
         local manifestfile = io.open(manifest_path(hash), 'w')
@@ -332,11 +339,11 @@ function modes.run(...)
         for i, pub in ipairs(signers) do
             local key = my_keys[pub]
             if key == nil then
-                print('Signature ' .. i .. colors': %{red}SKIPPED')
+                print('Signing ' .. i .. colors':\t%{red}SKIPPED')
             else
                 local sig = key:sign(rep, '')
                 file.write(signature_path(hash, i), sig)
-                print('Signature ' .. i .. colors': %{green}SIGNED')
+                print('Signing ' .. i .. colors': %{green}SIGNED')
             end
         end
 
@@ -345,10 +352,8 @@ function modes.run(...)
         cachefile:close()
 
         file.write(head_path(), hash)
-    else
-        print 'Not saving state (use --save)'
+        print(string.format(colors'Saving state:\t%{green}OK'))
     end
-
 end
 
 -- top-level command: print out all the public key hashes of the local private keys
@@ -357,43 +362,6 @@ function modes.keys()
         local key = open_private_key(filename)
         local pub = key:pubstr()
         print(filename, pub)
-    end
-end
-
--- Run a bit of Lua code in a specified SmartLua state
--- flags
---   --head=HASH - load the latest head of this named hash
---   --code=CODE - literal Lua code as a string
---   --file=FILE - path to Lua source file
---   --debug     - show transition debug print statements
-function modes.inspect(...)
-    local flags, params = app.parse_args({...}, Set{'hash', 'code', 'file'})
-    assert(#params == 0, 'no positional parameters expected')
-    local debugmode = flags.debug ~= nil
-    local usecache = flags.cached ~= nil
-
-    local hash
-    if flags.head then
-        hash = flags.head
-    else
-        hash = assert(file.read(head_path()), 'head not found')
-    end
-
-    local code
-    if flags.code then
-        code = flags.code
-    elseif flags.file then
-        code = assert(file.read(flags.file), 'unable to read code file')
-    end
-
-    local env, metaenv, signers = get_state(hash, debugmode, usecache)
-    if code then
-        print(colors'Inspect fragment: %{green}RUNNING')
-        local transition = {signers = {}, code = code}
-        local result = {step_transition(transition, env, metaenv, signers, hash == nil)}
-        print(table.unpack(result, 3))
-    else
-        print(colors'Inspect fragment: %{yellow}NONE')
     end
 end
 
