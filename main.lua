@@ -5,7 +5,6 @@ local app = require 'pl.app'
 local dir = require 'pl.dir'
 local file = require 'pl.file'
 local path = require 'pl.path'
-local pretty = require 'pl.pretty'
 local Set = require 'pl.Set'
 local stringio = require 'pl.stringio'
 local tablex = require 'pl.tablex'
@@ -14,6 +13,10 @@ local serialize = require 'serialize'
 local deserialize = require 'deserialize'
 
 local my_version = '0.1'
+
+local function hexstr(str)
+    return (string.gsub(str, '.', function(b) return string.format('%02x', string.byte(b)) end))
+end
 
 -----------------------------------------------------------------------
 -- State directories and file paths
@@ -38,8 +41,9 @@ local function cache_path(hash)
 end
 
 -- compute the path to a transition signature
-local function signature_path(hash, i)
-    return path.join(state_dir(hash), 'sig_' .. i)
+local function signature_path(hash, pubstr)
+    local raw = crypto.base64d(pubstr)
+    return path.join(state_dir(hash), 'sig_' .. hexstr(raw))
 end
 
 local function keys_dir()
@@ -51,8 +55,7 @@ end
 -----------------------------------------------------------------------
 
 local function sha256(x)
-    local h = crypto.digest('sha256', x)
-    return (string.gsub(h, '.', function(b) return string.format('%02x', string.byte(b)) end))
+    return hexstr(crypto.digest('sha256', x))
 end
 
 -- Get the private key object stored in a ed25519 private key PEM
@@ -243,8 +246,14 @@ local function get_state(tophash, debugmode, usecache)
 
     if usecache then
         print(string.format(colors'Cached state:\t%{yellow}%s', tophash))
-        local cachefile = io.open(cache_path(tophash))
-        deserialize(env, cachefile)
+
+        -- verify cached state's hash
+        local m = assert(file.read(manifest_path(tophash)))
+        local e = assert(file.read(cache_path(tophash)))
+        local got_hash = sha256(m .. e)
+        assert(got_hash == tophash)
+
+        deserialize(env, stringio.open(e))
         metaenv.__newindex = newindex_readonly
         return env, metaenv, signers
     end
@@ -259,7 +268,7 @@ local function get_state(tophash, debugmode, usecache)
         assert(got_hash == hash)
 
         for j, pubstr in ipairs(transition.signers) do
-            local sig = file.read(signature_path(hash, j))
+            local sig = file.read(signature_path(hash, pubstr))
             if sig == nil then
                 print(string.format(colors'Signature %d: %{red}MISSING', j))
             else
@@ -342,7 +351,7 @@ function modes.run(...)
                 print('Signing ' .. i .. colors':\t%{red}SKIPPED')
             else
                 local sig = key:sign(rep, '')
-                file.write(signature_path(hash, i), sig)
+                file.write(signature_path(hash, key:pubstr()), sig)
                 print('Signing ' .. i .. colors': %{green}SIGNED')
             end
         end
