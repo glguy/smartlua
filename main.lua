@@ -100,15 +100,17 @@ local function debug_print(...)
     print(colors'%{magenta}debug>', ...)
 end
 
-local function build_env(debugmode, env)
+local function build_env(debugmode)
 
     local signers = {}
 
-    local print_impl
+    local print_impl, debug_lib
     if debugmode then
         print_impl = debug_print
+        debug_lib = debug
     else
         print_impl = function() end
+        debug_lib = debug
     end
 
     local overlay = {
@@ -134,6 +136,7 @@ local function build_env(debugmode, env)
         xpcall = xpcall,
 
         print = print_impl,
+        debug = debug_lib,
     }
 
     local metaenv = {
@@ -141,7 +144,7 @@ local function build_env(debugmode, env)
         __metatable = true,
     }
 
-    env = env or {}
+    local env = {}
     setmetatable(env, metaenv)
 
     return env, metaenv, signers

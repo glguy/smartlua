@@ -5,7 +5,12 @@ local S = {}
 
 local function serialize_value(v, file, refs, uprefs, upixes)
     local t = type(v)
-    S[t](v, file, refs, uprefs, upixes)
+    local h = S[t]
+    if h then
+        h(v, file, refs, uprefs, upixes)
+    else
+        error('serialize does not support type: ' .. t)
+    end
 end
 
 function S.boolean(v, file)
