@@ -58,7 +58,7 @@ end
 -- Get the private key object stored in a ed25519 private key PEM
 local function open_private_key(filename)
     local pem = assert(file.read(filename))
-    return crypto.privatekey(pem)
+    return crypto.privatekey_pem(pem)
 end
 
 -- Open all the keys in the keys directory and return them in a table

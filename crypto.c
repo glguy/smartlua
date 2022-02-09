@@ -188,7 +188,7 @@ static int l_digest(lua_State *L)
     return 1;
 }
 
-static int l_privatekey(lua_State *L)
+static int l_privatekey_pem(lua_State *L)
 {
     size_t pem_len;
     char const* pem = luaL_checklstring(L, 1, &pem_len);
@@ -207,6 +207,36 @@ static int l_privatekey(lua_State *L)
         unsigned long err = ERR_get_error();
         ERR_clear_error();
         return luaL_error(L, "PEM_read_bio_PrivateKey failed (%lu)", err);
+    }
+
+    EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
+    *ud = key;
+    luaL_setmetatable(L, "EVP_PKEY");
+
+    return 1;
+}
+
+static int l_privatekey(lua_State *L)
+{
+    size_t key64_len;
+    char const* key64 = luaL_checklstring(L, 1, &key64_len);
+
+    if (key64_len != 44) {
+        return luaL_argerror(L, 1, "bad length");
+    }
+
+    unsigned char priv[32];
+    ssize_t priv_len = mybase64_decode(key64, key64_len, (char*)priv);
+
+    if (priv_len != 32) {
+        return luaL_argerror(L, 1, "bad decoded length");
+    }
+
+    EVP_PKEY *key = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, priv, priv_len);
+    if (key == NULL) {
+        unsigned long err = ERR_get_error();
+        ERR_clear_error();
+        return luaL_error(L, "EVP_PKEY_new_raw_private_key failed (%lu)", err);
     }
 
     EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
@@ -375,6 +405,7 @@ static const luaL_Reg cryptolib[] = {
     {"base64d", l_base64d},
     {"publickey", l_publickey},
     {"privatekey", l_privatekey},
+    {"privatekey_pem", l_privatekey_pem},
     {}
 };
 
