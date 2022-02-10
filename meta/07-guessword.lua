@@ -1,1 +1,1 @@
-invoke(1, 'guessword', 'ELDER')
+invoke(2, 'guessword', 'ELDER')

@@ -1,1 +1,1 @@
-invoke(1, 'giveclue', 'GGGGG')
+invoke(2, 'giveclue', 'GGGGG')
