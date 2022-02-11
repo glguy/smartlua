@@ -7,9 +7,9 @@ end
 
 local function chain(f)
     return function(...)
-        local r, g = f(...)
-        f = g
-        return r
+        local r = table.pack(f(...))
+        f = r[r.n]
+        return table.unpack(r, 1, r.n - 1)
     end
 end
 

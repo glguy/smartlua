@@ -251,7 +251,7 @@ local function get_state(tophash, debugmode, usecache)
     local env, metaenv, signers = build_env(debugmode)
 
     if usecache then
-        print(string.format(colors'Cached state:\t%{yellow}%s', tophash))
+        print(string.format(colors'Opening state:\t%{yellow}%s', tophash))
 
         -- verify cached state's hash
         local m = assert(file.read(manifest_path(tophash)))
