@@ -1,3 +1,7 @@
+local function dispatch(M)
+    return function(cmd, ...) return M[cmd](...) end
+end
+
 local function mkcommitment(secret, word)
     assert(type(secret) == 'string')
     assert(#secret == 16)
@@ -54,7 +58,8 @@ local function newgame(commitment, playerpub, hostpub)
     local clues = {}
 
     local function cleanup()
-        M = { getstate = M.getstate }
+        M.giveclue = nil
+        M.guessword = nil
     end    
 
     function M.giveclue(clue, secret, answer)
@@ -96,7 +101,7 @@ local function newgame(commitment, playerpub, hostpub)
         return pending, table.concat(words, ','), table.concat(clues, ',')
     end
 
-    return register(function(method, ...) return M[method](...) end)
+    return dispatch(M)
 end
 
-register(newgame)
+return 'wordle', register(newgame)

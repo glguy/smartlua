@@ -198,6 +198,11 @@ local function valid_transition(t)
     assert(type(t.code) == 'string')
     t.code = nil
 
+    assert(type(t.index) == 'number')
+    assert(math.type(t.index) == 'integer')
+    assert(t.index > 0)
+    t.index = nil
+
     -- no more entries allowed
     assert(next(t) == nil)
 end
@@ -213,6 +218,7 @@ end
 
 local function step_transition(transition, env, metaenv, signers, initial)
     tablex.icopy(signers, transition.signers)
+    rawset(env, 'index', transition.index)
     local chunk = assert(load(transition.code, '=(code)', 't', env))
     local result = {assert(pcall(chunk))}
 
@@ -249,23 +255,30 @@ local function get_state(tophash, debugmode, usecache)
 
         -- verify cached state's hash
         local m = assert(file.read(manifest_path(tophash)))
+        local manifest = {}
+        deserialize(manifest, stringio.open(m))
+
         local e = assert(file.read(cache_path(tophash)))
         local got_hash = sha256(m .. e)
         assert(got_hash == tophash)
 
         deserialize(env, stringio.open(e))
         metaenv.__newindex = newindex_readonly
-        return env, metaenv, signers
+        return env, metaenv, signers, manifest.index+1
     end
+
+    local next_index = 1
 
     for i = #transitions, 1, -1 do
         local initial = i == #transitions
         local transition = transitions[i]
         local hash = hashes[i]
 
-        print(string.format(colors'Running state: %{green}%s', hash))
+        print(string.format(colors'Running state:\t%{green}%s', hash))
         local got_hash, rep = step_transition(transition, env, metaenv, signers, initial)
         assert(got_hash == hash)
+        assert(transition.index == next_index)
+        next_index = next_index + 1
 
         for j, pubstr in ipairs(transition.signers) do
             local sig = file.read(signature_path(hash, pubstr))
@@ -282,7 +295,7 @@ local function get_state(tophash, debugmode, usecache)
         end
     end
 
-    return env, metaenv, signers
+    return env, metaenv, signers, next_index
 end
 
 -----------------------------------------------------------------------
@@ -317,15 +330,17 @@ function modes.run(...)
         parent = file.read(head_path())
     end
 
+    local initial = parent == nil
+    local env, metaenv, signers_table, next_index = get_state(parent, debugmode, usecache)
+
     local manifest = {
         smartlua = my_version,
         signers = signers,
         parent = parent,
+        index = next_index,
         code = code,
     }
 
-    local initial = parent == nil
-    local env, metaenv, signers_table = get_state(parent, debugmode, usecache)
     local result = {step_transition(manifest, env, metaenv, signers_table, initial)}
     local hash, rep = table.unpack(result, 1, 2)
 
@@ -374,9 +389,45 @@ function modes.keys()
     end
 end
 
+local function debug_env(top)
+    local seen = {}
+    local function go(prefix, x)
+        if seen[x] then print(prefix .. tostring(x)) return end
+        local t = type(x)
+        if t == 'function' then
+            seen[x] = true
+            local u = debug.getinfo(x, 'u').nups
+            print(prefix .. tostring(x) .. ' ' .. u)
+            for i = 1, u do
+                local uid = debug.upvalueid(x, i)
+                if seen[uid] then
+                    print(prefix .. '  ' .. tostring(uid))
+                else
+                    seen[uid] = true
+                    local _, v = debug.getupvalue(x, i)
+                    print(prefix .. '  ' .. tostring(uid) .. ' 1')
+                    go(prefix .. '    ', v)
+                end
+            end
+        elseif t == 'table' then
+            seen[x] = true
+            print(prefix .. tostring(x) .. ' ' .. tablex.size(x))
+            for k,v in pairs(x) do
+                go(prefix .. '  ', k)
+                go(prefix .. '    ', v)
+            end
+        else
+            print(prefix .. tostring(x))
+        end
+    end
+
+    go('', top)
+end
+
 function modes.show(hash)
     local manifest = open_manifest(hash)
     print(string.format(colors'Version:\t%{green}%s', manifest.smartlua))
+    print(string.format(colors'Generation:\t%{green}%s', manifest.index))
     if manifest.parent then
         print(string.format(colors'Parent state:\t%{green}%s', manifest.parent))
     else
@@ -387,6 +438,14 @@ function modes.show(hash)
     end
     print()
     print(manifest.code)
+
+    print(colors'%{magenta}==')
+    print()
+
+    local e = assert(file.read(cache_path(hash)))
+    local env = {}
+    deserialize(env, stringio.open(e))
+    debug_env(env)
 end
 
 local function dispatch(cmd, ...)

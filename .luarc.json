@@ -1,0 +1,7 @@
+{
+    "runtime.version" : "Lua 5.4",
+    "diagnostics": {
+        "enable": false,
+        "globals": ["register","invoke","signers","index"]
+    }
+}
