@@ -37,8 +37,8 @@ return 'wager', register(chain(function(cancel)
             else
                 error 'claim not ready'
             end
-            hoststake(dest)
-            playerstake(dest)
+            invoke(2, 'deposit', dest, playerstake)
+            invoke(2, 'deposit', dest, hoststake)
         end
     end
 end))

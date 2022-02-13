@@ -1,3 +1,9 @@
+-- This is a zero-sum balance ledger
+
+--[[
+    UTILITY LIBRARY
+]]
+
 local function authz(name)
     for _, v in ipairs(signers) do
         if v == name then return end
@@ -17,23 +23,25 @@ local function dispatch(M)
     return function(cmd, ...) return M[cmd](...) end
 end
 
+--[[
+    PRIVATE STATE
+]]
 local balances = {}
-for _, v in ipairs(signers) do
-    balances[v] = 100
-end
+local tokens = {n=0}
 
+--[[
+    PUBLIC API
+]]
 local M = {}
 
 function M.get(name) return balances[name] end
 
 function M.withdraw(name, amount)
     assert(math.type(amount) == 'integer', 'integral amount required')
+    assert(0 < amount, 'withdraw requires positive value')
 
     authz(name)
-    local bal = balances[name]
-    assert(bal ~= nil, 'so such account')
-    assert(0 < amount, 'nonpositive balance')
-    assert(amount <= bal, 'insufficient funds')
+    local bal = balances[name] or 0
 
     if bal == amount then
         bal = nil
@@ -42,9 +50,34 @@ function M.withdraw(name, amount)
     end
     balances[name] = bal
 
-    return chain(function(target)
-        balances[target] = (balances[target] or 0) + amount
-    end)
+    local tid = tokens.n + 1
+    tokens.n = tid
+    local token = { tid = tid }
+    tokens[tid] = token
+    tokens[token] = amount
+
+    return token
+end
+
+function M.deposit(name, token)
+    local tid = token.tid
+    assert(tokens[tid] == token, 'bad token')
+
+    local value = tokens[token]
+    balances[name] = (balances[name] or 0) + value
+    tokens[token] = nil
+
+    local n = tokens.n
+    tokens.n = n - 1
+    if tid == n then
+        tokens[tid] = nil
+    else
+        tokens[tid] = tokens[n] 
+        tokens[tid].tid = tid
+        tokens[n] = nil
+    end
+
+    return value
 end
 
 return 'ledger', register(dispatch(M))
