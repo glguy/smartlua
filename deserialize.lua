@@ -40,7 +40,7 @@ D['t'] = function(file, env, refs, uprefs, upixes)
     addref(t, refs)
     local n = math.tointeger(file:read())
     for _ = 1, n do
-        local key = deserialize_value(file)
+        local key = deserialize_value(file, env, refs)
         local val = deserialize_value(file, env, refs, uprefs, upixes)
         t[key] = val
     end

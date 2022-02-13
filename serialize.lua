@@ -58,12 +58,42 @@ local function heap_case(v, file, refs)
     end
 end
 
+local function order(x, y)
+    local t1, t2 = type(x), type(y)
+    return t1 < t2 or t1 == t2 and x < y
+end
+
 function S.table(t, file, refs, uprefs, upixes)
     if heap_case(t, file, refs) then
-        utils.fprintf(file, "t\n%d\n", tablex.size(t))
-        for k, v in tablex.sort(t) do
-            serialize_value(k, file)
-            serialize_value(v, file, refs, uprefs, upixes)
+        local keys = tablex.keys(t)
+        utils.fprintf(file, "t\n%d\n", #keys)
+
+        local value_keys = {}
+        local heap_keys = {}
+
+        for k in pairs(t) do
+            local ty = type(k)
+            if ty == 'function' or ty == 'table' then
+                table.insert(heap_keys, k)
+            else
+                table.insert(value_keys, k)
+            end
+        end
+
+        table.sort(value_keys, order)
+        for _, k in ipairs(value_keys) do
+            serialize_value(k, file, refs)
+            serialize_value(t[k], file, refs, uprefs, upixes)
+        end
+
+        table.sort(heap_keys, function(x,y)
+            x = assert(refs[x], "keys can't allocate")
+            y = assert(refs[y], "keys can't allocate")
+            return x < y
+        end)
+        for _, k in ipairs(heap_keys) do
+            serialize_value(k, file, refs)
+            serialize_value(t[k], file, refs, uprefs, upixes)
         end
     end
 end
