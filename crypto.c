@@ -161,9 +161,9 @@ static int l_hmac(lua_State *L)
     unsigned int digest_len = sizeof digest;
     unsigned char *result = HMAC(md, key, key_len, (unsigned char const*)data, data_len, digest, &digest_len);
     if (result == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "HMAC error (%lu)", err);
+        return luaL_error(L, "HMAC error (%I)", (lua_Integer)err);
     }
 
     lua_pushlstring(L, (char const*)digest, digest_len);
@@ -180,9 +180,9 @@ static int l_digest(lua_State *L)
     unsigned int out_len;
     int result = EVP_Digest(data, data_len, out, &out_len, md, NULL);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "digest failed (%lu)", err);
+        return luaL_error(L, "digest failed (%I)", err);
     }
 
     lua_pushlstring(L, (char*)out, out_len);
@@ -209,24 +209,24 @@ static int l_privatekey_pem(lua_State *L)
 {
     size_t pem_len;
     char const* pem = luaL_checklstring(L, 1, &pem_len);
-    
+
     struct sized_password password;
     password.ptr = luaL_optlstring(L, 2, NULL, &password.len);
 
     BIO *bio = BIO_new_mem_buf(pem, pem_len);
     if (bio == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "BIO_new_mem_buf failed (%lu)", err);
+        return luaL_error(L, "BIO_new_mem_buf failed (%I)", err);
     }
 
     EVP_PKEY *key = PEM_read_bio_PrivateKey(bio, NULL, give_password, &password);
     BIO_free_all(bio);
 
     if (key == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "PEM_read_bio_PrivateKey failed (%lu)", err);
+        return luaL_error(L, "PEM_read_bio_PrivateKey failed (%I)", err);
     }
 
     EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
@@ -254,9 +254,9 @@ static int l_privatekey(lua_State *L)
 
     EVP_PKEY *key = EVP_PKEY_new_raw_private_key(EVP_PKEY_ED25519, NULL, priv, priv_len);
     if (key == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "EVP_PKEY_new_raw_private_key failed (%lu)", err);
+        return luaL_error(L, "EVP_PKEY_new_raw_private_key failed (%I)", err);
     }
 
     EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
@@ -266,19 +266,26 @@ static int l_privatekey(lua_State *L)
     return 1;
 }
 
+static EVP_PKEY* pkey_arg(lua_State* L, int arg)
+{
+    EVP_PKEY **ud = luaL_checkudata(L, arg, "EVP_PKEY");
+    EVP_PKEY *pkey = *ud;
+    luaL_argcheck(L, pkey != NULL, arg, "private key use after free");
+    return pkey;
+}
+
 static int l_pubstr(lua_State *L)
 {
-    EVP_PKEY **ud = luaL_checkudata(L, 1, "EVP_PKEY");
-    EVP_PKEY *key = *ud;
+    EVP_PKEY *key = pkey_arg(L, 1);
 
     char pub[32];
     size_t len = 32;
 
     int result = EVP_PKEY_get_raw_public_key(key, (unsigned char*)pub, &len);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "EVP_PKEY_get_raw_public_key failed (%lu)", err);
+        return luaL_error(L, "EVP_PKEY_get_raw_public_key failed (%I)", err);
     }
 
     char pub64[45];
@@ -304,9 +311,9 @@ static int l_publickey(lua_State *L)
 
     EVP_PKEY *key = EVP_PKEY_new_raw_public_key(EVP_PKEY_ED25519, NULL, (unsigned char*)raw, rawlen);
     if (key == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "EVP_PKEY_new_raw_public_key failed (%lu)", err);
+        return luaL_error(L, "EVP_PKEY_new_raw_public_key failed (%I)", err);
     }
 
     EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
@@ -318,6 +325,7 @@ static int l_publickey(lua_State *L)
 
 static int l_free_evp(lua_State *L)
 {
+    // pkey_arg would have checked for NULL ptr, so don't use it here
     EVP_PKEY **ud = luaL_checkudata(L, 1, "EVP_PKEY");
     EVP_PKEY_free(*ud);
     *ud = NULL;
@@ -326,26 +334,24 @@ static int l_free_evp(lua_State *L)
 
 static int l_sign(lua_State *L)
 {
-    EVP_PKEY **ud = luaL_checkudata(L, 1, "EVP_PKEY");
-    EVP_PKEY *pkey = *ud;
-    luaL_argcheck(L, pkey != NULL, 1, "invalid private key");
+    EVP_PKEY *pkey = pkey_arg(L, 1);
 
     size_t msg_len;
     char const* msg = luaL_checklstring(L, 2, &msg_len);
 
     EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
     if (md_ctx == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "EVP_MD_CTX_new failed (%lu)", err);
+        return luaL_error(L, "EVP_MD_CTX_new failed (%I)", err);
     }
 
     int result = EVP_DigestSignInit(md_ctx, NULL, NULL, NULL, pkey);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
         EVP_MD_CTX_free(md_ctx);
-        return luaL_error(L, "EVP_DigestSignInit failed (%lu)", err);
+        return luaL_error(L, "EVP_DigestSignInit failed (%I)", err);
     }
 
     size_t sig_len;
@@ -353,10 +359,10 @@ static int l_sign(lua_State *L)
     /* Calculate the requires size for the signature by passing a NULL buffer */
     result = EVP_DigestSign(md_ctx, NULL, &sig_len, (unsigned char*)msg, msg_len);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
         EVP_MD_CTX_free(md_ctx);
-        return luaL_error(L, "EVP_DigestSign (1) failed (%lu)", err);
+        return luaL_error(L, "EVP_DigestSign (1) failed (%I)", err);
     }
 
     luaL_Buffer B;
@@ -364,10 +370,10 @@ static int l_sign(lua_State *L)
 
     result = EVP_DigestSign(md_ctx, (unsigned char*)B.b, &sig_len, (unsigned char*)msg, msg_len);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
         EVP_MD_CTX_free(md_ctx);
-        return luaL_error(L, "EVP_DigestSign (2) failed (%lu)", err);
+        return luaL_error(L, "EVP_DigestSign (2) failed (%I)", err);
     }
 
     luaL_pushresultsize(&B, sig_len);
@@ -379,9 +385,7 @@ static int l_sign(lua_State *L)
 
 static int l_verify(lua_State *L)
 {
-    EVP_PKEY **ud = luaL_checkudata(L, 1, "EVP_PKEY");
-    EVP_PKEY *pkey = *ud;
-    luaL_argcheck(L, pkey != NULL, 1, "invalid private key");
+    EVP_PKEY *pkey = pkey_arg(L, 1);
 
     size_t sig_len;
     char const* sig = luaL_checklstring(L, 2, &sig_len);
@@ -391,30 +395,82 @@ static int l_verify(lua_State *L)
 
     EVP_MD_CTX *md_ctx = EVP_MD_CTX_new();
     if (md_ctx == NULL) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
-        return luaL_error(L, "EVP_MD_CTX_new failed (%lu)", err);
+        return luaL_error(L, "EVP_MD_CTX_new failed (%I)", err);
     }
 
     int result = EVP_DigestVerifyInit(md_ctx, NULL, NULL, NULL, pkey);
     if (result == 0) {
-        unsigned long err = ERR_get_error();
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
         EVP_MD_CTX_free(md_ctx);
-        return luaL_error(L, "EVP_DigestVerifyInit failed (%lu)", err);
+        return luaL_error(L, "EVP_DigestVerifyInit failed (%I)", err);
     }
 
     result = EVP_DigestVerify(md_ctx, (unsigned char const*)sig, sig_len, (unsigned char const*)msg, msg_len);
-    if (result == 0) {
-        unsigned long err = ERR_get_error();
+    if (result != 0 && result != 1) {
+        lua_Integer err = ERR_get_error();
         ERR_clear_error();
         EVP_MD_CTX_free(md_ctx);
-        return luaL_error(L, "EVP_DigestVerify failed (%lu)", err);
+        return luaL_error(L, "EVP_DigestVerify failed (%I)", err);
     }
-    
+
     EVP_MD_CTX_free(md_ctx);
 
-    lua_pushboolean(L, result == 1);
+    lua_pushboolean(L, result);
+    return 1;
+}
+
+static int l_genkey(lua_State *L)
+{
+    EVP_PKEY* key = EVP_PKEY_Q_keygen(NULL, NULL, "ED25519");
+
+    if (NULL == key) {
+        lua_Integer err = ERR_get_error();
+        ERR_clear_error();
+        return luaL_error(L, "EVP_DigestVerifyInit failed (%I)", err);
+    }
+
+    EVP_PKEY **ud = lua_newuserdatauv(L, sizeof key, 0);
+    *ud = key;
+    luaL_setmetatable(L, "EVP_PKEY");
+
+    return 1;
+}
+
+static int l_to_pem(lua_State* L)
+{
+    EVP_PKEY *pkey = pkey_arg(L, 1);
+
+    struct sized_password password;
+    password.ptr = luaL_optlstring(L, 2, NULL, &password.len);
+
+    BIO *bio = BIO_new(BIO_s_mem());
+    if (bio == NULL) {
+        lua_Integer err = ERR_get_error();
+        ERR_clear_error();
+        return luaL_error(L, "BIO_new failed (%I)", err);
+    }
+
+    EVP_CIPHER const* cipher = NULL;
+    if (password.len > 0) {
+        cipher = EVP_aes_256_cbc();
+    }
+
+    int res = PEM_write_bio_PrivateKey(bio, pkey, cipher, NULL, 0, give_password, &password);
+    if (0 == res) {
+        lua_Integer err = ERR_get_error();
+        ERR_clear_error();
+        BIO_free(bio);
+        return luaL_error(L, "PEM_write_bio_PrivateKey failed (%I)", err);
+    }
+
+    BUF_MEM *bptr;
+    BIO_get_mem_ptr(bio, &bptr);
+    lua_pushlstring(L, bptr->data, bptr->length);
+    BIO_free(bio);
+
     return 1;
 }
 
@@ -426,6 +482,7 @@ static const luaL_Reg cryptolib[] = {
     {"publickey", l_publickey},
     {"privatekey", l_privatekey},
     {"privatekey_pem", l_privatekey_pem},
+    {"genkey", l_genkey},
     {}
 };
 
@@ -433,6 +490,7 @@ static const luaL_Reg pkeylib[] = {
     {"sign", l_sign},
     {"verify", l_verify},
     {"pubstr", l_pubstr},
+    {"pem", l_to_pem},
     {}
 };
 

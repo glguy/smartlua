@@ -13,7 +13,7 @@ local function serialize_value(v, file, refs, uprefs, upixes)
     end
 end
 
-function S.boolean(v, file)
+S['boolean'] = function(v, file)
     if v then
         file:write 'T\n'
     else
@@ -25,11 +25,11 @@ S['nil'] = function(_, file)
     file:write 'N\n'
 end
 
-function S.string(v, file)
+S['string'] = function(v, file)
     utils.fprintf(file, "S\n%d\n%s\n", #v, v)
 end
 
-function S.number(v, file)
+S['number'] = function(v, file)
     if v == math.huge then
         utils.fprintf(file, "I\n")
     elseif -v == math.huge then
@@ -58,12 +58,12 @@ local function heap_case(v, file, refs)
     end
 end
 
-local function order(x, y)
+local function typed_order(x, y)
     local t1, t2 = type(x), type(y)
     return t1 < t2 or t1 == t2 and x < y
 end
 
-function S.table(t, file, refs, uprefs, upixes)
+S['table'] = function(t, file, refs, uprefs, upixes)
     if heap_case(t, file, refs) then
         local keys = tablex.keys(t)
         utils.fprintf(file, "t\n%d\n", #keys)
@@ -80,7 +80,7 @@ function S.table(t, file, refs, uprefs, upixes)
             end
         end
 
-        table.sort(value_keys, order)
+        table.sort(value_keys, typed_order)
         for _, k in ipairs(value_keys) do
             serialize_value(k, file, refs)
             serialize_value(t[k], file, refs, uprefs, upixes)

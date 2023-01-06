@@ -5,6 +5,7 @@ local app = require 'pl.app'
 local dir = require 'pl.dir'
 local file = require 'pl.file'
 local path = require 'pl.path'
+local pretty = require 'pl.pretty'
 local Set = require 'pl.Set'
 local stringio = require 'pl.stringio'
 local tablex = require 'pl.tablex'
@@ -250,7 +251,7 @@ local function get_state(tophash, debugmode, usecache)
 
     local env, metaenv, signers = build_env(debugmode)
 
-    if usecache then
+    if tophash ~= nil and usecache then
         print(string.format(colors'Opening state:\t%{yellow}%s', tophash))
 
         -- verify cached state's hash
@@ -392,7 +393,7 @@ end
 local function debug_env(top)
     local seen = {}
     local function go(prefix, x)
-        if seen[x] then print(prefix .. tostring(x)) return end
+        if seen[x] then print(prefix .. tostring(x) .. ' &') return end
         local t = type(x)
         if t == 'function' then
             seen[x] = true
@@ -425,6 +426,10 @@ local function debug_env(top)
 end
 
 function modes.show(hash)
+    if hash == nil then
+        hash = file.read(head_path())
+    end
+
     local manifest = open_manifest(hash)
     print(string.format(colors'Version:\t%{green}%s', manifest.smartlua))
     print(string.format(colors'Generation:\t%{green}%s', manifest.index))
@@ -448,8 +453,25 @@ function modes.show(hash)
     debug_env(env)
 end
 
+function modes.newkey(name, password)
+    local key = crypto.genkey()
+    local pem = key:pem(password)
+    local kd = keys_dir()
+    dir.makepath(kd)
+    local p = path.join(kd, name)
+    file.write(p, pem)
+    print(p, key:pubstr())
+end
+
 local function dispatch(cmd, ...)
-    local mode = assert(modes[cmd], 'unknown command')
-    mode(...)
+    local mode = modes[cmd]
+    if mode then
+        mode(...)
+    else
+        print 'Available commands:'
+        for k, _ in tablex.sort(modes) do
+            print(('  %s'):format(k))
+        end
+    end
 end
 dispatch(...)

@@ -19,13 +19,11 @@ D['i'] = function() return -math.huge end
 D['E'] = function() return 0/0 end
 
 D['Z'] = function(file)
-    local line = file:read()
-    return math.tointeger(line)
+    return math.tointeger(file:read())
 end
 
 D['D'] = function(file)
-    local line = file:read()
-    return tonumber(line)
+    return tonumber(file:read())
 end
 
 D['S'] = function(file)
@@ -91,6 +89,6 @@ return function(t, file)
         local val = deserialize_value(file, t, refs, uprefs, upixes)
         t[key] = val
     end
-    assert(file:read() == nil) -- no leftofvers allowed
+    assert(file:read() == nil) -- no left-overs allowed
     return t
 end
